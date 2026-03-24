@@ -18,3 +18,18 @@ View your app in AI Studio: https://ai.studio/apps/e09aebd2-e973-4a8b-ae5d-c5411
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+
+## Demo Mode Toggle
+
+This prototype supports a demo bypass mode for the Quote / Your Move / Admin flows.
+
+- `VITE_DEMO_MODE=true` (default if unset): keeps demo bypasses enabled (e.g., `ESP-12345`, admin demo password).
+- `VITE_DEMO_MODE=false`: disables demo-only bypass logic so the app expects secure backend auth/API routes.
+
+Example `.env.local`:
+
+```
+VITE_DEMO_MODE=true
+```
+

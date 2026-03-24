@@ -1,38 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { INVENTORY_CATEGORIES } from '../constants';
+import { DEMO_MODE, STORAGE_KEYS } from '../config';
+import { INVENTORY_CATEGORIES } from '../constants';
+import { quoteStore, SavedQuote, CustomsItem, Message } from '../services';
+import { INVENTORY_CATEGORIES } from '../constants';
 import { 
   Lock, CheckCircle2, Truck, ClipboardList, MessageSquare, 
   Calendar, FileText, Send, Plus, Trash2, AlertCircle, 
   ChevronRight, MapPin, Package, ShieldCheck, UserCircle, History, ExternalLink,
   Upload, FileCheck, File, X, Loader2, Clock, Save
 } from 'lucide-react';
-
-interface Message {
-  id: string;
-  text: string;
-  sender: 'client' | 'agent';
-  timestamp: string;
-}
-
-interface CustomsItem {
-  id: string;
-  description: string;
-  value: string;
-  boxNumber?: string;
-}
-
-interface SavedQuote {
-  ref: string;
-  email: string;
-  volume: number;
-  price: number;
-  date: string;
-  status: string;
-  origin: string;
-  destination: string;
-  customsList?: CustomsItem[];
-  messages?: Message[];
-}
 
 interface UserDocument {
   id: string;
@@ -44,17 +22,21 @@ interface UserDocument {
 
 const YourMove: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [reference, setReference] = useState('');
-  const [surname, setSurname] = useState('');
+  const [reference, setReference] = useState(DEMO_MODE ? 'ESP-12345' : '');
+  const [customerEmail, setCustomerEmail] = useState(DEMO_MODE ? 'demo@example.com' : '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
   const [activeMoveData, setActiveMoveData] = useState<SavedQuote | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'customs' | 'documents' | 'messages'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'customs' | 'documents' | 'messages'>('overview');
   
   // Synced state for customs list
   const [itinerary, setItinerary] = useState<CustomsItem[]>([]);
   const [newItem, setNewItem] = useState({ description: '', value: '', boxNumber: '' });
+  const [inventorySelections, setInventorySelections] = useState<Record<string, number>>({});
+  const [inventoryCustomItems, setInventoryCustomItems] = useState<Array<{ id: string; label: string; volume: number; quantity: number }>>([]);
+  const [newInventoryLabel, setNewInventoryLabel] = useState('');
+  const [newInventoryVolume, setNewInventoryVolume] = useState<number | ''>('');
   const [isSavingCustoms, setIsSavingCustoms] = useState(false);
 
   // Fix: Added missing 'documents' and 'isUploading' states to resolve reference errors in handleFileUpload and JSX.
@@ -79,6 +61,8 @@ const YourMove: React.FC = () => {
     if (activeMoveData) {
       setItinerary(activeMoveData.customsList || []);
       setMessages(activeMoveData.messages || []);
+      setInventorySelections(activeMoveData.inventorySelections || {});
+      setInventoryCustomItems(activeMoveData.inventoryCustomItems || []);
       if (activeTab === 'messages') {
         setTimeout(scrollToBottom, 100);
       }
@@ -88,7 +72,7 @@ const YourMove: React.FC = () => {
   // Real-time message sync across tabs
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'britons_saved_quotes' && activeMoveData) {
+      if (e.key === STORAGE_KEYS.quotes && activeMoveData) {
         const allQuotes: SavedQuote[] = JSON.parse(e.newValue || '[]');
         const updated = allQuotes.find(q => q.ref === activeMoveData.ref);
         if (updated && JSON.stringify(updated.messages) !== JSON.stringify(messages)) {
@@ -102,9 +86,7 @@ const YourMove: React.FC = () => {
   }, [activeMoveData, messages]);
 
   const persistQuoteChanges = (updatedQuote: SavedQuote) => {
-    const allQuotes = JSON.parse(localStorage.getItem('britons_saved_quotes') || '[]');
-    const newQuotes = allQuotes.map((q: SavedQuote) => q.ref === updatedQuote.ref ? updatedQuote : q);
-    localStorage.setItem('britons_saved_quotes', JSON.stringify(newQuotes));
+    quoteStore.upsert(updatedQuote);
     setActiveMoveData(updatedQuote);
   };
 
@@ -124,16 +106,97 @@ const YourMove: React.FC = () => {
     persistCustomsChanges(updated);
   };
 
+
+  const buildCustomsFromInventory = (
+    selections: Record<string, number>,
+    custom: Array<{ id: string; label: string; volume: number; quantity: number }>
+  ): CustomsItem[] => {
+    const existingByDescription = new Map(itinerary.map(i => [i.description, i]));
+    const items: CustomsItem[] = [];
+
+    INVENTORY_CATEGORIES.forEach(category => {
+      category.items.forEach(item => {
+        const qty = selections[item.id] || 0;
+        if (qty > 0) {
+          const description = `${qty} x ${item.label}`;
+          const prev = existingByDescription.get(description);
+          items.push({ id: `inv-${item.id}`, description, value: prev?.value || '', boxNumber: prev?.boxNumber || '' });
+        }
+      });
+    });
+
+    custom.forEach(ci => {
+      if (ci.quantity > 0) {
+        const description = `${ci.quantity} x ${ci.label}`;
+        const prev = existingByDescription.get(description);
+        items.push({ id: ci.id, description, value: prev?.value || '', boxNumber: prev?.boxNumber || '' });
+      }
+    });
+
+    return items;
+  };
+
+  const persistInventoryAndCustoms = (
+    selections: Record<string, number>,
+    custom: Array<{ id: string; label: string; volume: number; quantity: number }>
+  ) => {
+    if (!activeMoveData) return;
+    const newCustoms = buildCustomsFromInventory(selections, custom);
+    setItinerary(newCustoms);
+    const updatedQuote = {
+      ...activeMoveData,
+      inventorySelections: selections,
+      inventoryCustomItems: custom,
+      customsList: newCustoms,
+    };
+    persistQuoteChanges(updatedQuote);
+  };
+
+  const updateInventoryQty = (itemId: string, delta: number) => {
+    const current = inventorySelections[itemId] || 0;
+    const next = Math.max(0, current + delta);
+    const updatedSelections = { ...inventorySelections };
+    if (next === 0) delete updatedSelections[itemId];
+    else updatedSelections[itemId] = next;
+    setInventorySelections(updatedSelections);
+    persistInventoryAndCustoms(updatedSelections, inventoryCustomItems);
+  };
+
+  const addCustomInventoryItem = () => {
+    if (!newInventoryLabel || newInventoryVolume === '' || Number(newInventoryVolume) <= 0) return;
+    const newItem = {
+      id: `custom-inv-${Date.now()}`,
+      label: newInventoryLabel,
+      volume: Number(newInventoryVolume),
+      quantity: 1,
+    };
+    const updated = [...inventoryCustomItems, newItem];
+    setInventoryCustomItems(updated);
+    persistInventoryAndCustoms(inventorySelections, updated);
+    setNewInventoryLabel('');
+    setNewInventoryVolume('');
+  };
+
+  const updateCustomInventoryQty = (id: string, delta: number) => {
+    const updated = inventoryCustomItems
+      .map(ci => (ci.id === id ? { ...ci, quantity: Math.max(0, ci.quantity + delta) } : ci))
+      .filter(ci => ci.quantity > 0);
+    setInventoryCustomItems(updated);
+    persistInventoryAndCustoms(inventorySelections, updated);
+  };
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    setTimeout(() => {
-      const savedQuotes: SavedQuote[] = JSON.parse(localStorage.getItem('britons_saved_quotes') || '[]');
-      const foundQuote = savedQuotes.find(q => q.ref.toUpperCase() === reference.toUpperCase());
+    setTimeout(async () => {
+      const savedQuotes = await quoteStore.getAll();
+      const normalizedEmail = customerEmail.trim().toLowerCase();
+      const foundQuote = savedQuotes.find(q => q.ref.toUpperCase() === reference.toUpperCase() && q.email.toLowerCase() === normalizedEmail);
       
-      if (reference.toUpperCase() === 'ESP-12345' || foundQuote) {
+      const demoAccountMatch = DEMO_MODE && reference.toUpperCase() === 'ESP-12345' && normalizedEmail === 'demo@example.com';
+      if (demoAccountMatch || foundQuote) {
         if (foundQuote) {
           setActiveMoveData(foundQuote);
         } else {
@@ -159,7 +222,7 @@ const YourMove: React.FC = () => {
         }
         setIsAuthenticated(true);
       } else {
-        setError('Reference not found. Please check your quote email.');
+        setError('Reference and email do not match. Please check your quote email.');
       }
       setLoading(false);
     }, 1200);
@@ -204,7 +267,7 @@ const YourMove: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
     setIsUploading(docId);
-    setTimeout(() => {
+    setTimeout(async () => {
       setDocuments(prev => prev.map(doc => {
         if (doc.id === docId) {
           return { ...doc, status: 'pending', fileName: file.name, uploadDate: new Date().toLocaleDateString() };
@@ -232,6 +295,7 @@ const YourMove: React.FC = () => {
             </div>
             <h2 className="text-3xl font-bold text-slate-900">Your Move Portal</h2>
             <p className="text-slate-500 mt-2 text-sm">Enter your quote reference or move ID</p>
+            {DEMO_MODE && <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-2">Demo credentials preloaded</p>}
           </div>
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
@@ -240,8 +304,8 @@ const YourMove: React.FC = () => {
               {error && <p className="text-red-500 text-[10px] font-bold mt-1 uppercase tracking-wider">{error}</p>}
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Lead Surname / Email</label>
-              <input required type="text" placeholder="Enter your registered name" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={surname} onChange={(e) => setSurname(e.target.value)} />
+              <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Registered Email</label>
+              <input required type="email" placeholder="name@example.com" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
             </div>
             <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2">
               {loading ? <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <><span className="text-white">Access Dashboard</span><ChevronRight size={18} className="text-white"/></>}
@@ -260,7 +324,7 @@ const YourMove: React.FC = () => {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
               <div className="flex items-center space-x-3 text-blue-400 text-sm font-bold uppercase tracking-widest mb-2"><Truck size={16} /><span>Reference: {reference || activeMoveData?.ref}</span></div>
-              <h2 className="text-4xl font-black">Hello, {surname || 'Valued Customer'}</h2>
+              <h2 className="text-4xl font-black">Hello, {activeMoveData?.customerName || customerEmail || 'Valued Customer'}</h2>
               <p className="text-slate-400 mt-2">Your relocation to <span className="text-white font-bold">{activeMoveData?.destination || 'Spain'}</span> is {activeMoveData?.status.toLowerCase() === 'quote saved' ? 'ready for booking.' : 'currently in progress.'}</p>
             </div>
             <div className="flex items-center space-x-4">
@@ -279,6 +343,7 @@ const YourMove: React.FC = () => {
         <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden min-h-[600px] flex flex-col md:flex-row">
           <div className="w-full md:w-64 bg-slate-50 border-r border-slate-100 p-6 space-y-2">
             <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'overview' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-200'}`}><Package size={20} /><span>Overview</span></button>
+            <button onClick={() => setActiveTab('inventory')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'inventory' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-200'}`}><ClipboardList size={20} /><span>Inventory</span></button>
             <button onClick={() => setActiveTab('customs')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'customs' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-200'}`}><ClipboardList size={20} /><span>Customs List</span></button>
             <button onClick={() => setActiveTab('documents')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'documents' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-200'}`}><FileCheck size={20} /><span>Documents</span></button>
             <button onClick={() => setActiveTab('messages')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'messages' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-200'}`}><MessageSquare size={20} /><span>Messages</span></button>
@@ -306,6 +371,60 @@ const YourMove: React.FC = () => {
                       <div className="flex justify-between"><span className="text-slate-500 text-sm">Estimated Total</span><span className="font-bold text-blue-600 text-lg">£{activeMoveData?.price.toLocaleString()}</span></div>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+
+            {activeTab === 'inventory' && (
+              <div className="space-y-8 animate-fade-in">
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-900">Online Inventory Builder</h3>
+                  <p className="text-sm text-slate-500 mt-1">This mirrors your quote inventory and auto-syncs to your Customs List.</p>
+                </div>
+                <div className="space-y-4 max-h-[460px] overflow-y-auto pr-2 custom-scrollbar">
+                  {INVENTORY_CATEGORIES.map(category => (
+                    <div key={category.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <h4 className="font-bold text-slate-900 mb-3">{category.label}</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {category.items.map(item => (
+                          <div key={item.id} className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2">
+                            <span className="text-sm font-medium text-slate-700">{item.label}</span>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => updateInventoryQty(item.id, -1)} className="p-1 rounded border border-slate-300"><Trash2 size={12} /></button>
+                              <span className="min-w-6 text-center font-bold">{inventorySelections[item.id] || 0}</span>
+                              <button onClick={() => updateInventoryQty(item.id, 1)} className="p-1 rounded border border-slate-300"><Plus size={12} /></button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 p-4 bg-slate-50">
+                  <h4 className="font-bold text-slate-900 mb-3">Custom Inventory Items</h4>
+                  <div className="flex flex-col md:flex-row gap-2 mb-3">
+                    <input value={newInventoryLabel} onChange={(e) => setNewInventoryLabel(e.target.value)} placeholder="Item name" className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                    <input value={newInventoryVolume} onChange={(e) => setNewInventoryVolume(e.target.value === '' ? '' : Number(e.target.value))} placeholder="m³" type="number" min="0" step="0.01" className="w-28 bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                    <button onClick={addCustomInventoryItem} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Add</button>
+                  </div>
+                  <div className="space-y-2">
+                    {inventoryCustomItems.map(ci => (
+                      <div key={ci.id} className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2">
+                        <span className="text-sm font-medium">{ci.label}</span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => updateCustomInventoryQty(ci.id, -1)} className="p-1 rounded border border-slate-300"><Trash2 size={12} /></button>
+                          <span className="min-w-6 text-center font-bold">{ci.quantity}</span>
+                          <button onClick={() => updateCustomInventoryQty(ci.id, 1)} className="p-1 rounded border border-slate-300"><Plus size={12} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="p-4 bg-green-50 border border-green-100 rounded-xl flex items-center space-x-3">
+                  <CheckCircle2 className="text-green-600" size={18} />
+                  <p className="text-xs font-bold text-green-800 uppercase tracking-wide">SYNC ACTIVE: Inventory updates are mirrored to your Customs List and visible to admin.</p>
                 </div>
               </div>
             )}
