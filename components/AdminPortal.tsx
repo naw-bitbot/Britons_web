@@ -1,46 +1,17 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { DEMO_MODE, STORAGE_KEYS } from '../config';
+import { quoteStore, SavedQuote, CustomsItem, Message } from '../services';
 import { 
   Lock, ShieldCheck, ChevronRight, Users, TrendingUp, 
   Package, Calendar, CheckCircle, Clock, Trash2, 
   Search, Filter, Download, LayoutDashboard, Database, AlertCircle, RefreshCw, Eye, X, MapPin, Info, Truck, Archive, ClipboardList, Plus, Save, UserCircle, MessageSquare, Send
 } from 'lucide-react';
 
-interface Message {
-  id: string;
-  text: string;
-  sender: 'client' | 'agent';
-  timestamp: string;
-}
-
-interface CustomsItem {
-  id: string;
-  description: string;
-  value: string;
-  boxNumber?: string;
-}
-
-interface SavedQuote {
-  ref: string;
-  email: string;
-  volume: number;
-  price: number;
-  date: string;
-  status: string;
-  origin: string;
-  destination: string;
-  moveType?: string;
-  extras?: string[];
-  propertySize?: string;
-  timestamp?: number;
-  customsList?: CustomsItem[];
-  messages?: Message[];
-}
-
 // Fix: Declaring AdminPortal as a functional component with explicit React.FC type.
 const AdminPortal: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(DEMO_MODE ? 'admin123' : '');
   const [loading, setLoading] = useState(false);
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,6 +26,7 @@ const AdminPortal: React.FC = () => {
   // Chat States
   const [adminMessages, setAdminMessages] = useState<Message[]>([]);
   const [adminNewMessage, setAdminNewMessage] = useState('');
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -80,7 +52,7 @@ const AdminPortal: React.FC = () => {
   // Sync messages from other tabs (e.g., if client sends a message)
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'britons_saved_quotes' && selectedQuote) {
+      if (e.key === STORAGE_KEYS.quotes && selectedQuote) {
         const allQuotes: SavedQuote[] = JSON.parse(e.newValue || '[]');
         const updated = allQuotes.find(q => q.ref === selectedQuote.ref);
         if (updated && JSON.stringify(updated.messages) !== JSON.stringify(adminMessages)) {
@@ -93,36 +65,64 @@ const AdminPortal: React.FC = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [selectedQuote, adminMessages]);
 
-  const loadQuotes = () => {
-    const saved = JSON.parse(localStorage.getItem('britons_saved_quotes') || '[]');
-    setQuotes(saved.reverse()); 
+
+  // Non-demo fallback sync (polling) for backend mode
+  useEffect(() => {
+    if (DEMO_MODE || !selectedQuote) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const allQuotes = await quoteStore.getAll();
+        const updated = allQuotes.find(q => q.ref === selectedQuote.ref);
+        if (!updated) return;
+
+        if (JSON.stringify(updated.messages) !== JSON.stringify(adminMessages)) {
+          setAdminMessages(updated.messages || []);
+        }
+        setQuotes(allQuotes.slice().reverse());
+      } catch {
+        // no-op
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [selectedQuote, adminMessages]);
+
+  const loadQuotes = async () => {
+    const saved = await quoteStore.getAll();
+    setQuotes(saved.slice().reverse());
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
-      if (password === 'admin123') {
+      if (DEMO_MODE && password === 'admin123') {
         setIsAuthenticated(true);
       } else {
-        alert('Invalid admin password');
+        alert(DEMO_MODE ? 'Invalid admin password' : 'Demo admin bypass is disabled. Connect secure backend auth.');
       }
       setLoading(false);
     }, 800);
   };
 
-  const updateQuoteInStorage = (updatedQuote: SavedQuote) => {
-    const allQuotes = JSON.parse(localStorage.getItem('britons_saved_quotes') || '[]');
-    const newQuotes = allQuotes.map((q: SavedQuote) => q.ref === updatedQuote.ref ? updatedQuote : q);
-    localStorage.setItem('britons_saved_quotes', JSON.stringify(newQuotes));
-    setQuotes(newQuotes.slice().reverse());
+  const updateQuoteInStorage = async (updatedQuote: SavedQuote) => {
+    try {
+      setSyncStatus('saving');
+      await quoteStore.upsert(updatedQuote);
+      await loadQuotes();
+      setSyncStatus('saved');
+      setTimeout(() => setSyncStatus('idle'), 1200);
+    } catch {
+      setSyncStatus('error');
+    }
   };
 
   const updateQuoteStatus = (ref: string, newStatus: string) => {
     const quote = quotes.find(q => q.ref === ref);
     if (!quote) return;
     const updated = { ...quote, status: newStatus };
-    updateQuoteInStorage(updated);
+    void updateQuoteInStorage(updated);
     if (selectedQuote?.ref === ref) {
       setSelectedQuote(updated);
     }
@@ -131,7 +131,7 @@ const AdminPortal: React.FC = () => {
   const saveCustomsChanges = () => {
     if (!selectedQuote) return;
     const updated = { ...selectedQuote, customsList: editingCustoms };
-    updateQuoteInStorage(updated);
+    void updateQuoteInStorage(updated);
     setSelectedQuote(updated);
     alert('Customs manifest updated successfully.');
   };
@@ -151,7 +151,7 @@ const AdminPortal: React.FC = () => {
     setAdminMessages(updatedMessages);
     
     const updatedQuote = { ...selectedQuote, messages: updatedMessages };
-    updateQuoteInStorage(updatedQuote);
+    void updateQuoteInStorage(updatedQuote);
     setSelectedQuote(updatedQuote);
     setAdminNewMessage('');
     setTimeout(scrollToBottom, 100);
@@ -173,9 +173,8 @@ const AdminPortal: React.FC = () => {
 
   const deleteQuote = (ref: string) => {
     if (confirm('Are you sure you want to delete this quote record?')) {
-      const allQuotes = JSON.parse(localStorage.getItem('britons_saved_quotes') || '[]');
-      const newQuotes = allQuotes.filter((q: SavedQuote) => q.ref !== ref);
-      localStorage.setItem('britons_saved_quotes', JSON.stringify(newQuotes));
+      const newQuotes = quotes.filter((q: SavedQuote) => q.ref !== ref);
+      quoteStore.replaceAll(newQuotes);
       setQuotes(newQuotes.slice().reverse());
       if (selectedQuote?.ref === ref) setSelectedQuote(null);
     }
@@ -208,6 +207,7 @@ const AdminPortal: React.FC = () => {
             </div>
             <h2 className="text-3xl font-bold text-slate-900">Admin Portal</h2>
             <p className="text-slate-500 mt-2 text-sm">Staff portal for Briton's Removals</p>
+            {DEMO_MODE && <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-2">Demo credentials preloaded</p>}
           </div>
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
@@ -219,6 +219,7 @@ const AdminPortal: React.FC = () => {
             </button>
           </form>
           <p className="text-center text-[10px] text-slate-400 mt-6 font-bold uppercase tracking-widest">Authorized Access Only</p>
+          <p className="text-center text-[10px] text-amber-500 mt-2 font-bold uppercase tracking-widest">{DEMO_MODE ? 'Demo mode enabled' : 'Demo mode disabled'}</p>
         </div>
       </div>
     );
@@ -242,6 +243,7 @@ const AdminPortal: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center space-x-3">
+              {syncStatus !== 'idle' && <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded ${syncStatus === 'error' ? 'bg-red-500/20 text-red-300' : syncStatus === 'saved' ? 'bg-green-500/20 text-green-300' : 'bg-blue-500/20 text-blue-300'}`}>{syncStatus === 'saving' ? 'Syncing…' : syncStatus === 'saved' ? 'Sync Active' : 'Sync Error'}</span>}
               <button onClick={loadQuotes} className="p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors" title="Refresh Data">
                 <RefreshCw size={20} />
               </button>
@@ -312,7 +314,7 @@ const AdminPortal: React.FC = () => {
                         filteredQuotes.map(quote => (
                           <tr key={quote.ref} className="hover:bg-slate-50/50 transition-colors group">
                             <td className="px-6 py-5"><span className="font-mono font-black text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs">{quote.ref}</span></td>
-                            <td className="px-6 py-5"><p className="text-sm font-bold text-slate-900">{quote.email}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{quote.date || 'No date set'}</p></td>
+                            <td className="px-6 py-5"><p className="text-sm font-bold text-slate-900">{quote.customerName || 'Customer'}</p><p className="text-xs text-slate-500">{quote.email}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{quote.date || 'No date set'}</p></td>
                             <td className="px-6 py-5"><p className="text-xs font-medium text-slate-600">{quote.origin} → {quote.destination}</p><p className="text-[10px] text-slate-400 font-bold">{quote.volume} m³</p></td>
                             <td className="px-6 py-5"><span className="text-sm font-black text-slate-900">£{quote.price.toLocaleString()}</span></td>
                             <td className="px-6 py-5"><span className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${quote.status === 'Quote Accepted' ? 'bg-green-100 text-green-700' : quote.status === 'Quote Saved' ? 'bg-blue-100 text-blue-700' : quote.status === 'Archived' ? 'bg-slate-200 text-slate-600' : 'bg-slate-100 text-slate-700'}`}>{quote.status}</span></td>
@@ -368,7 +370,7 @@ const AdminPortal: React.FC = () => {
                  <p className="text-slate-500 max-w-md mb-8">Export all system quotes to a CSV or JSON file for secondary backup or external auditing.</p>
                  <div className="flex gap-4">
                     <button className="px-8 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all flex items-center space-x-2"><Download size={18} /><span>Export Full CSV</span></button>
-                    <button onClick={() => { if(confirm('WIPE ALL QUOTES?')) { localStorage.removeItem('britons_saved_quotes'); setQuotes([]); } }} className="px-8 py-3 bg-red-50 text-red-600 border border-red-200 font-bold rounded-xl hover:bg-red-600 hover:text-white transition-all flex items-center space-x-2"><AlertCircle size={18} /><span>Wipe All Records</span></button>
+                    <button onClick={() => { if(confirm('WIPE ALL QUOTES?')) { quoteStore.replaceAll([]); setQuotes([]); } }} className="px-8 py-3 bg-red-50 text-red-600 border border-red-200 font-bold rounded-xl hover:bg-red-600 hover:text-white transition-all flex items-center space-x-2"><AlertCircle size={18} /><span>Wipe All Records</span></button>
                  </div>
               </div>
             )}
@@ -401,7 +403,7 @@ const AdminPortal: React.FC = () => {
                           <span>Client Profile</span>
                        </h4>
                        <div className="space-y-3">
-                          <div><p className="text-[10px] font-bold text-slate-400 uppercase">Email</p><p className="text-sm font-black text-slate-900 truncate">{selectedQuote.email}</p></div>
+                          <div><p className="text-[10px] font-bold text-slate-400 uppercase">Customer</p><p className="text-sm font-black text-slate-900 truncate">{selectedQuote.customerName || 'Customer'}</p><p className="text-xs text-slate-500 truncate">{selectedQuote.email}</p></div>
                           <div><p className="text-[10px] font-bold text-slate-400 uppercase">Target Date</p><p className="text-sm font-black text-slate-900">{selectedQuote.date || 'TBC'}</p></div>
                           <div><p className="text-[10px] font-bold text-slate-400 uppercase">Volume</p><p className="text-sm font-black text-slate-900">{selectedQuote.volume} m³</p></div>
                           <div><p className="text-[10px] font-bold text-slate-400 uppercase">Status</p>

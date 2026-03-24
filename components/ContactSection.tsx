@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Mail, Phone, MapPin, Clock, Globe } from 'lucide-react';
 import { COMPANY_INFO } from '../constants';
@@ -9,14 +8,11 @@ const ContactSection: React.FC = () => {
     <section id="contact" className="py-24 bg-slate-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
-          
-          {/* Contact Info */}
           <div className="space-y-12">
             <div>
-              <h2 className="text-4xl font-bold text-slate-900 mb-6">Contact Us</h2>
+              <h2 className="text-4xl font-bold text-slate-900 mb-6">Talk to a team that understands European household removals</h2>
               <p className="text-slate-600 text-lg leading-relaxed mb-8">
-                Ready for your move to Spain? Or perhaps you need secure storage for your belongings? 
-                Our team in Derby is ready to provide a free, no-obligation survey and quote.
+                If you are planning a move to or from Spain, France, Germany, Italy or elsewhere in Europe, we can help you get it properly organised. We will talk through volume, access, packing, timing and any customs or storage requirements, then give you a clear, practical next step.
               </p>
             </div>
 
@@ -59,24 +55,23 @@ const ContactSection: React.FC = () => {
                   <Clock className="text-blue-600" size={24} />
                 </div>
                 <div>
-                  <h4 className="font-bold text-slate-900">Spain Runs</h4>
-                  <p className="text-slate-600 text-sm mt-1 font-medium">Weekly Departures</p>
+                  <h4 className="font-bold text-slate-900">European Routes</h4>
+                  <p className="text-slate-600 text-sm mt-1 font-medium">Regular scheduled departures</p>
                 </div>
               </div>
             </div>
 
             <div className="bg-blue-600 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
               <Globe className="absolute -bottom-10 -right-10 w-40 h-40 opacity-10" />
-              <h4 className="text-xl font-bold mb-3 relative z-10">Spanish Relocation Experts</h4>
+              <h4 className="text-xl font-bold mb-3 relative z-10">Experienced in moves across Europe</h4>
               <p className="text-blue-100 relative z-10 leading-relaxed">
-                {COMPANY_INFO.spainExpertise}
+                From Spain and France to Germany, Italy and other European destinations, we handle the practical side of household removals properly: planning, packing, loading, paperwork, storage and delivery.
               </p>
             </div>
           </div>
 
-          {/* Contact Form Container */}
           <div className="bg-white p-8 md:p-12 rounded-3xl shadow-2xl border border-slate-100">
-            <QuoteForm title="Quick Enquiry" />
+            <QuoteForm title="Speak to our removals team" />
           </div>
         </div>
       </div>

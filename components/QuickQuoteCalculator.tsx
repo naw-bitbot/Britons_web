@@ -1,7 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Calculator, Home, Info, ShieldCheck, Truck, Package, Plus, Minus, ChevronDown, ChevronUp, Trash2, ArrowRight, ListChecks, Calendar, PlusCircle, AlertTriangle, Mail, Save, CheckCircle } from 'lucide-react';
 import { CALCULATOR_OPTIONS, INVENTORY_CATEGORIES } from '../constants';
+import { quoteStore, SavedQuote } from '../services';
 
 interface QuickQuoteCalculatorProps {
   onRequestFullQuote: () => void;
@@ -17,8 +18,13 @@ interface CustomItem {
 const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFullQuote }) => {
   const [calculationMode, setCalculationMode] = useState<'size' | 'inventory'>('size');
   const [propertySize, setPropertySize] = useState(CALCULATOR_OPTIONS.propertySizes[1].id);
-  const [ukRegion, setUkRegion] = useState(CALCULATOR_OPTIONS.ukRegions[0].id);
-  const [spainRegion, setSpainRegion] = useState(CALCULATOR_OPTIONS.spainRegions[0].id);
+  const routeOptions = useMemo(() => ([
+    ...CALCULATOR_OPTIONS.ukRegions.map(r => ({ id: `uk-${r.id}`, label: r.label, offset: r.offset })),
+    ...CALCULATOR_OPTIONS.spainRegions.map(r => ({ id: `es-${r.id}`, label: r.label, offset: r.offset })),
+  ]), []);
+
+  const [originRegion, setOriginRegion] = useState(routeOptions[0].id);
+  const [destinationRegion, setDestinationRegion] = useState(routeOptions[CALCULATOR_OPTIONS.ukRegions.length].id);
   const [moveType, setMoveType] = useState<'dedicated' | 'shared'>('dedicated');
   const [moveDate, setMoveDate] = useState('');
   const [extras, setExtras] = useState<string[]>([]);
@@ -29,7 +35,9 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
   // Save Quote State
   const [isSaving, setIsSaving] = useState(false);
   const [email, setEmail] = useState('');
+  const [customerName, setCustomerName] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [generatedRef, setGeneratedRef] = useState('');
   
   // Custom item input state
@@ -64,35 +72,50 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
   }, [calculationMode, propertySize, inventory, customItems]);
 
   const totalEstimate = useMemo(() => {
-    const uk = CALCULATOR_OPTIONS.ukRegions.find(r => r.id === ukRegion);
-    const spain = CALCULATOR_OPTIONS.spainRegions.find(r => r.id === spainRegion);
-    
-    if (!uk || !spain) return 0;
+    const origin = routeOptions.find(r => r.id === originRegion);
+    const destination = routeOptions.find(r => r.id === destinationRegion);
+
+    if (!origin || !destination) return 0;
 
     let base = totalVolume * CALCULATOR_OPTIONS.pricePerM3;
     if (base < 500) base = 500;
-    if (moveType === 'shared') base = base * 0.75; 
+    if (moveType === 'shared') base = base * 0.75;
 
-    base += uk.offset;
-    base += spain.offset;
+    base += origin.offset;
+    base += destination.offset;
 
     if (extras.includes('packing')) base += totalVolume * 50;
     if (extras.includes('storage')) base += 180;
     if (extras.includes('insurance')) base += 120;
 
     return Math.round(base);
-  }, [totalVolume, ukRegion, spainRegion, moveType, extras]);
+  }, [totalVolume, originRegion, destinationRegion, moveType, extras, routeOptions]);
+
+
+  const isSharedLoadAllowed = calculationMode !== 'size' || propertySize !== '4bed';
+
+  useEffect(() => {
+    if (!isSharedLoadAllowed && moveType === 'shared') {
+      setMoveType('dedicated');
+    }
+  }, [isSharedLoadAllowed, moveType]);
 
   const toggleExtra = (id: string) => {
     setExtras(prev => prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]);
   };
 
-  const handleSaveQuote = (e: React.FormEvent) => {
+  const handleSaveQuote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    if (!email || !customerName.trim()) return;
+    setSaveError('');
 
-    // Generate reference
-    const ref = `ESP-${Math.floor(10000 + Math.random() * 90000)}`;
+    // Generate unique reference to avoid accidental cross-account collisions
+    const existingQuotes = await quoteStore.getAll();
+    const existingRefs = new Set(existingQuotes.map(q => q.ref));
+    let ref = '';
+    do {
+      ref = `ESP-${Math.floor(10000 + Math.random() * 90000)}`;
+    } while (existingRefs.has(ref));
     setGeneratedRef(ref);
 
     // Build Customs Manifest only if Detailed Inventory was used
@@ -122,28 +145,32 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
     }
 
     // Persist for system (via localStorage mock)
-    const quoteData = {
+    const quoteData: SavedQuote = {
       ref,
       email,
+      customerName: customerName.trim(),
       volume: totalVolume,
       price: totalEstimate,
       date: moveDate,
       status: 'Quote Saved',
-      origin: CALCULATOR_OPTIONS.ukRegions.find(r => r.id === ukRegion)?.label,
-      destination: CALCULATOR_OPTIONS.spainRegions.find(r => r.id === spainRegion)?.label,
+      origin: routeOptions.find(r => r.id === originRegion)?.label,
+      destination: routeOptions.find(r => r.id === destinationRegion)?.label,
       moveType: moveType,
       extras: extras.map(exId => CALCULATOR_OPTIONS.services.find(s => s.id === exId)?.label || exId),
       propertySize: calculationMode === 'size' ? CALCULATOR_OPTIONS.propertySizes.find(s => s.id === propertySize)?.label : 'Custom Inventory',
       customsList: initialCustomsList,
+      inventorySelections: calculationMode === 'inventory' ? inventory : {},
+      inventoryCustomItems: calculationMode === 'inventory' ? customItems : [],
       timestamp: Date.now()
     };
     
-    const savedQuotes = JSON.parse(localStorage.getItem('britons_saved_quotes') || '[]');
-    savedQuotes.push(quoteData);
-    localStorage.setItem('britons_saved_quotes', JSON.stringify(savedQuotes));
-
-    setSaveSuccess(true);
-    setIsSaving(false);
+    try {
+      await quoteStore.create(quoteData);
+      setSaveSuccess(true);
+      setIsSaving(false);
+    } catch (err) {
+      setSaveError('Unable to save estimate right now. Please try again.');
+    }
   };
 
   const updateInventory = (id: string, delta: number) => {
@@ -326,24 +353,24 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
                   <span className="font-bold block">Dedicated Load</span>
                   <span className="text-xs text-slate-500">Fastest Direct Route</span>
                 </button>
-                <button onClick={() => setMoveType('shared')} className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center text-center space-y-2 ${moveType === 'shared' ? 'border-blue-500 bg-blue-500/10' : 'border-slate-800 bg-slate-800/50 hover:border-slate-700'}`}>
+                <button onClick={() => isSharedLoadAllowed && setMoveType('shared')} disabled={!isSharedLoadAllowed} className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center text-center space-y-2 ${!isSharedLoadAllowed ? 'opacity-40 cursor-not-allowed border-slate-800 bg-slate-800/30' : moveType === 'shared' ? 'border-blue-500 bg-blue-500/10' : 'border-slate-800 bg-slate-800/50 hover:border-slate-700'}`}>
                   <Package className={moveType === 'shared' ? 'text-blue-400' : 'text-slate-500'} />
                   <span className="font-bold block">Shared Load</span>
-                  <span className="text-xs text-slate-500">Weekly Groupage</span>
+                  <span className="text-xs text-slate-500">{isSharedLoadAllowed ? 'Weekly Groupage' : 'Not available for 4+ bed dedicated moves'}</span>
                 </button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <label className="text-sm font-bold text-slate-400 uppercase tracking-widest">UK Origin</label>
-                  <select value={ukRegion} onChange={(e) => setUkRegion(e.target.value)} className="w-full bg-slate-800 border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none">
-                    {CALCULATOR_OPTIONS.ukRegions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                  <label className="text-sm font-bold text-slate-400 uppercase tracking-widest">Origin</label>
+                  <select value={originRegion} onChange={(e) => setOriginRegion(e.target.value)} className="w-full bg-slate-800 border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none">
+                    {routeOptions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                   </select>
                 </div>
                 <div className="space-y-3">
-                  <label className="text-sm font-bold text-slate-400 uppercase tracking-widest">Spain Destination</label>
-                  <select value={spainRegion} onChange={(e) => setSpainRegion(e.target.value)} className="w-full bg-slate-800 border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none">
-                    {CALCULATOR_OPTIONS.spainRegions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                  <label className="text-sm font-bold text-slate-400 uppercase tracking-widest">Destination</label>
+                  <select value={destinationRegion} onChange={(e) => setDestinationRegion(e.target.value)} className="w-full bg-slate-800 border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none">
+                    {routeOptions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                   </select>
                 </div>
                 <div className="space-y-3 sm:col-span-2">
@@ -398,7 +425,7 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
               {saveSuccess ? (
                 <div className="mb-8 p-6 bg-green-50 rounded-2xl border border-green-200 animate-fade-in text-center">
                   <CheckCircle size={32} className="text-green-600 mx-auto mb-3" />
-                  <h4 className="font-bold text-slate-900 text-lg">Quote Saved Successfully!</h4>
+                  <h4 className="font-bold text-slate-900 text-lg">Quote Saved Successfully, {customerName}!</h4>
                   <p className="text-slate-600 text-sm mt-1">Your reference: <span className="font-mono font-black text-blue-600">{generatedRef}</span></p>
                   <p className="text-xs text-slate-500 mt-2">A copy has been emailed to {email}. You can use this reference in the <span className="font-bold">Your Move</span> portal.</p>
                   <button 
@@ -415,6 +442,15 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
                     <span>Send Quote to Email</span>
                   </h4>
                   <div className="space-y-4">
+                    {saveError && <p className="text-xs font-bold text-red-600">{saveError}</p>}
+                    <input
+                      required
+                      type="text"
+                      placeholder="Enter your full name..."
+                      className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                    />
                     <input 
                       required
                       type="email" 
@@ -489,7 +525,7 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
                 onClick={onRequestFullQuote}
                 className="w-full bg-slate-900 text-white py-5 rounded-2xl font-bold text-lg hover:bg-blue-600 transition-all transform hover:scale-[1.02] shadow-xl flex items-center justify-center space-x-3"
               >
-                <span>Book Free Video Survey</span>
+                <span>Submit Estimate</span>
                 <ArrowRight size={20} />
               </button>
             </div>
