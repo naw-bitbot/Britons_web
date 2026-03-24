@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Calculator, Home, Info, ShieldCheck, Truck, Package, Plus, Minus, ChevronDown, ChevronUp, Trash2, ArrowRight, ListChecks, Calendar, PlusCircle, AlertTriangle, Mail, Save, CheckCircle } from 'lucide-react';
 import { CALCULATOR_OPTIONS, INVENTORY_CATEGORIES } from '../constants';
+import { quoteStore, SavedQuote } from '../services';
 
 interface QuickQuoteCalculatorProps {
   onRequestFullQuote: () => void;
@@ -87,12 +88,17 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
     setExtras(prev => prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]);
   };
 
-  const handleSaveQuote = (e: React.FormEvent) => {
+  const handleSaveQuote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
 
-    // Generate reference
-    const ref = `ESP-${Math.floor(10000 + Math.random() * 90000)}`;
+    // Generate unique reference to avoid accidental cross-account collisions
+    const existingQuotes = await quoteStore.getAll();
+    const existingRefs = new Set(existingQuotes.map(q => q.ref));
+    let ref = '';
+    do {
+      ref = `ESP-${Math.floor(10000 + Math.random() * 90000)}`;
+    } while (existingRefs.has(ref));
     setGeneratedRef(ref);
 
     // Build Customs Manifest only if Detailed Inventory was used
@@ -122,7 +128,7 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
     }
 
     // Persist for system (via localStorage mock)
-    const quoteData = {
+    const quoteData: SavedQuote = {
       ref,
       email,
       volume: totalVolume,
@@ -138,9 +144,7 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
       timestamp: Date.now()
     };
     
-    const savedQuotes = JSON.parse(localStorage.getItem('britons_saved_quotes') || '[]');
-    savedQuotes.push(quoteData);
-    localStorage.setItem('britons_saved_quotes', JSON.stringify(savedQuotes));
+    await quoteStore.create(quoteData);
 
     setSaveSuccess(true);
     setIsSaving(false);
