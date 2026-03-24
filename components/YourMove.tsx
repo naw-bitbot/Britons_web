@@ -1,38 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { DEMO_MODE, STORAGE_KEYS } from '../config';
+import { quoteStore, SavedQuote, CustomsItem, Message } from '../services';
 import { 
   Lock, CheckCircle2, Truck, ClipboardList, MessageSquare, 
   Calendar, FileText, Send, Plus, Trash2, AlertCircle, 
   ChevronRight, MapPin, Package, ShieldCheck, UserCircle, History, ExternalLink,
   Upload, FileCheck, File, X, Loader2, Clock, Save
 } from 'lucide-react';
-
-interface Message {
-  id: string;
-  text: string;
-  sender: 'client' | 'agent';
-  timestamp: string;
-}
-
-interface CustomsItem {
-  id: string;
-  description: string;
-  value: string;
-  boxNumber?: string;
-}
-
-interface SavedQuote {
-  ref: string;
-  email: string;
-  volume: number;
-  price: number;
-  date: string;
-  status: string;
-  origin: string;
-  destination: string;
-  customsList?: CustomsItem[];
-  messages?: Message[];
-}
 
 interface UserDocument {
   id: string;
@@ -45,7 +20,7 @@ interface UserDocument {
 const YourMove: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [reference, setReference] = useState('');
-  const [surname, setSurname] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -88,7 +63,7 @@ const YourMove: React.FC = () => {
   // Real-time message sync across tabs
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'britons_saved_quotes' && activeMoveData) {
+      if (e.key === STORAGE_KEYS.quotes && activeMoveData) {
         const allQuotes: SavedQuote[] = JSON.parse(e.newValue || '[]');
         const updated = allQuotes.find(q => q.ref === activeMoveData.ref);
         if (updated && JSON.stringify(updated.messages) !== JSON.stringify(messages)) {
@@ -102,9 +77,7 @@ const YourMove: React.FC = () => {
   }, [activeMoveData, messages]);
 
   const persistQuoteChanges = (updatedQuote: SavedQuote) => {
-    const allQuotes = JSON.parse(localStorage.getItem('britons_saved_quotes') || '[]');
-    const newQuotes = allQuotes.map((q: SavedQuote) => q.ref === updatedQuote.ref ? updatedQuote : q);
-    localStorage.setItem('britons_saved_quotes', JSON.stringify(newQuotes));
+    quoteStore.upsert(updatedQuote);
     setActiveMoveData(updatedQuote);
   };
 
@@ -129,11 +102,13 @@ const YourMove: React.FC = () => {
     setLoading(true);
     setError('');
 
-    setTimeout(() => {
-      const savedQuotes: SavedQuote[] = JSON.parse(localStorage.getItem('britons_saved_quotes') || '[]');
-      const foundQuote = savedQuotes.find(q => q.ref.toUpperCase() === reference.toUpperCase());
+    setTimeout(async () => {
+      const savedQuotes = await quoteStore.getAll();
+      const normalizedEmail = customerEmail.trim().toLowerCase();
+      const foundQuote = savedQuotes.find(q => q.ref.toUpperCase() === reference.toUpperCase() && q.email.toLowerCase() === normalizedEmail);
       
-      if (reference.toUpperCase() === 'ESP-12345' || foundQuote) {
+      const demoAccountMatch = DEMO_MODE && reference.toUpperCase() === 'ESP-12345' && normalizedEmail === 'demo@example.com';
+      if (demoAccountMatch || foundQuote) {
         if (foundQuote) {
           setActiveMoveData(foundQuote);
         } else {
@@ -159,7 +134,7 @@ const YourMove: React.FC = () => {
         }
         setIsAuthenticated(true);
       } else {
-        setError('Reference not found. Please check your quote email.');
+        setError('Reference and email do not match. Please check your quote email.');
       }
       setLoading(false);
     }, 1200);
@@ -204,7 +179,7 @@ const YourMove: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
     setIsUploading(docId);
-    setTimeout(() => {
+    setTimeout(async () => {
       setDocuments(prev => prev.map(doc => {
         if (doc.id === docId) {
           return { ...doc, status: 'pending', fileName: file.name, uploadDate: new Date().toLocaleDateString() };
@@ -240,8 +215,8 @@ const YourMove: React.FC = () => {
               {error && <p className="text-red-500 text-[10px] font-bold mt-1 uppercase tracking-wider">{error}</p>}
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Lead Surname / Email</label>
-              <input required type="text" placeholder="Enter your registered name" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={surname} onChange={(e) => setSurname(e.target.value)} />
+              <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Registered Email</label>
+              <input required type="email" placeholder="name@example.com" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
             </div>
             <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2">
               {loading ? <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <><span className="text-white">Access Dashboard</span><ChevronRight size={18} className="text-white"/></>}
@@ -260,7 +235,7 @@ const YourMove: React.FC = () => {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
               <div className="flex items-center space-x-3 text-blue-400 text-sm font-bold uppercase tracking-widest mb-2"><Truck size={16} /><span>Reference: {reference || activeMoveData?.ref}</span></div>
-              <h2 className="text-4xl font-black">Hello, {surname || 'Valued Customer'}</h2>
+              <h2 className="text-4xl font-black">Hello, {customerEmail || 'Valued Customer'}</h2>
               <p className="text-slate-400 mt-2">Your relocation to <span className="text-white font-bold">{activeMoveData?.destination || 'Spain'}</span> is {activeMoveData?.status.toLowerCase() === 'quote saved' ? 'ready for booking.' : 'currently in progress.'}</p>
             </div>
             <div className="flex items-center space-x-4">

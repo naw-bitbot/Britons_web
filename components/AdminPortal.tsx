@@ -1,41 +1,12 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { DEMO_MODE, STORAGE_KEYS } from '../config';
+import { quoteStore, SavedQuote, CustomsItem, Message } from '../services';
 import { 
   Lock, ShieldCheck, ChevronRight, Users, TrendingUp, 
   Package, Calendar, CheckCircle, Clock, Trash2, 
   Search, Filter, Download, LayoutDashboard, Database, AlertCircle, RefreshCw, Eye, X, MapPin, Info, Truck, Archive, ClipboardList, Plus, Save, UserCircle, MessageSquare, Send
 } from 'lucide-react';
-
-interface Message {
-  id: string;
-  text: string;
-  sender: 'client' | 'agent';
-  timestamp: string;
-}
-
-interface CustomsItem {
-  id: string;
-  description: string;
-  value: string;
-  boxNumber?: string;
-}
-
-interface SavedQuote {
-  ref: string;
-  email: string;
-  volume: number;
-  price: number;
-  date: string;
-  status: string;
-  origin: string;
-  destination: string;
-  moveType?: string;
-  extras?: string[];
-  propertySize?: string;
-  timestamp?: number;
-  customsList?: CustomsItem[];
-  messages?: Message[];
-}
 
 // Fix: Declaring AdminPortal as a functional component with explicit React.FC type.
 const AdminPortal: React.FC = () => {
@@ -80,7 +51,7 @@ const AdminPortal: React.FC = () => {
   // Sync messages from other tabs (e.g., if client sends a message)
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'britons_saved_quotes' && selectedQuote) {
+      if (e.key === STORAGE_KEYS.quotes && selectedQuote) {
         const allQuotes: SavedQuote[] = JSON.parse(e.newValue || '[]');
         const updated = allQuotes.find(q => q.ref === selectedQuote.ref);
         if (updated && JSON.stringify(updated.messages) !== JSON.stringify(adminMessages)) {
@@ -93,29 +64,27 @@ const AdminPortal: React.FC = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [selectedQuote, adminMessages]);
 
-  const loadQuotes = () => {
-    const saved = JSON.parse(localStorage.getItem('britons_saved_quotes') || '[]');
-    setQuotes(saved.reverse()); 
+  const loadQuotes = async () => {
+    const saved = await quoteStore.getAll();
+    setQuotes(saved.slice().reverse());
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
-      if (password === 'admin123') {
+      if (DEMO_MODE && password === 'admin123') {
         setIsAuthenticated(true);
       } else {
-        alert('Invalid admin password');
+        alert(DEMO_MODE ? 'Invalid admin password' : 'Demo admin bypass is disabled. Connect secure backend auth.');
       }
       setLoading(false);
     }, 800);
   };
 
   const updateQuoteInStorage = (updatedQuote: SavedQuote) => {
-    const allQuotes = JSON.parse(localStorage.getItem('britons_saved_quotes') || '[]');
-    const newQuotes = allQuotes.map((q: SavedQuote) => q.ref === updatedQuote.ref ? updatedQuote : q);
-    localStorage.setItem('britons_saved_quotes', JSON.stringify(newQuotes));
-    setQuotes(newQuotes.slice().reverse());
+    quoteStore.upsert(updatedQuote);
+    loadQuotes();
   };
 
   const updateQuoteStatus = (ref: string, newStatus: string) => {
@@ -173,9 +142,8 @@ const AdminPortal: React.FC = () => {
 
   const deleteQuote = (ref: string) => {
     if (confirm('Are you sure you want to delete this quote record?')) {
-      const allQuotes = JSON.parse(localStorage.getItem('britons_saved_quotes') || '[]');
-      const newQuotes = allQuotes.filter((q: SavedQuote) => q.ref !== ref);
-      localStorage.setItem('britons_saved_quotes', JSON.stringify(newQuotes));
+      const newQuotes = quotes.filter((q: SavedQuote) => q.ref !== ref);
+      quoteStore.replaceAll(newQuotes);
       setQuotes(newQuotes.slice().reverse());
       if (selectedQuote?.ref === ref) setSelectedQuote(null);
     }
@@ -219,6 +187,7 @@ const AdminPortal: React.FC = () => {
             </button>
           </form>
           <p className="text-center text-[10px] text-slate-400 mt-6 font-bold uppercase tracking-widest">Authorized Access Only</p>
+          <p className="text-center text-[10px] text-amber-500 mt-2 font-bold uppercase tracking-widest">{DEMO_MODE ? 'Demo mode enabled' : 'Demo mode disabled'}</p>
         </div>
       </div>
     );
@@ -368,7 +337,7 @@ const AdminPortal: React.FC = () => {
                  <p className="text-slate-500 max-w-md mb-8">Export all system quotes to a CSV or JSON file for secondary backup or external auditing.</p>
                  <div className="flex gap-4">
                     <button className="px-8 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all flex items-center space-x-2"><Download size={18} /><span>Export Full CSV</span></button>
-                    <button onClick={() => { if(confirm('WIPE ALL QUOTES?')) { localStorage.removeItem('britons_saved_quotes'); setQuotes([]); } }} className="px-8 py-3 bg-red-50 text-red-600 border border-red-200 font-bold rounded-xl hover:bg-red-600 hover:text-white transition-all flex items-center space-x-2"><AlertCircle size={18} /><span>Wipe All Records</span></button>
+                    <button onClick={() => { if(confirm('WIPE ALL QUOTES?')) { quoteStore.replaceAll([]); setQuotes([]); } }} className="px-8 py-3 bg-red-50 text-red-600 border border-red-200 font-bold rounded-xl hover:bg-red-600 hover:text-white transition-all flex items-center space-x-2"><AlertCircle size={18} /><span>Wipe All Records</span></button>
                  </div>
               </div>
             )}
