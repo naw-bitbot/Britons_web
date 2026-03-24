@@ -1,10 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { INVENTORY_CATEGORIES } from '../constants';
 import { DEMO_MODE, STORAGE_KEYS } from '../config';
-import { INVENTORY_CATEGORIES } from '../constants';
 import { quoteStore, SavedQuote, CustomsItem, Message } from '../services';
-import { INVENTORY_CATEGORIES } from '../constants';
 import { 
   Lock, CheckCircle2, Truck, ClipboardList, MessageSquare, 
   Calendar, FileText, Send, Plus, Trash2, AlertCircle, 
@@ -87,46 +84,9 @@ const YourMove: React.FC = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [activeMoveData, messages]);
 
-
-  // Non-demo fallback sync (polling) for backend mode
-  useEffect(() => {
-    if (DEMO_MODE || !activeMoveData) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const allQuotes = await quoteStore.getAll();
-        const updated = allQuotes.find(q => q.ref === activeMoveData.ref);
-        if (!updated) return;
-
-        if (JSON.stringify(updated.messages) !== JSON.stringify(messages)) {
-          setMessages(updated.messages || []);
-        }
-        if (JSON.stringify(updated.customsList) !== JSON.stringify(itinerary)) {
-          setItinerary(updated.customsList || []);
-        }
-        setActiveMoveData(updated);
-      } catch {
-        // Keep silent: sync status banner will indicate failed writes.
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [activeMoveData, messages, itinerary]);
-
-  const persistQuoteChanges = async (updatedQuote: SavedQuote) => {
-    try {
-      setSyncStatus('saving');
-      setSyncError('');
-      await quoteStore.upsert(updatedQuote);
-      setActiveMoveData(updatedQuote);
-      setSyncStatus('saved');
-      setTimeout(() => setSyncStatus('idle'), 1200);
-      return true;
-    } catch (err) {
-      setSyncStatus('error');
-      setSyncError('Sync failed. Please retry.');
-      return false;
-    }
+  const persistQuoteChanges = (updatedQuote: SavedQuote) => {
+    quoteStore.upsert(updatedQuote);
+    setActiveMoveData(updatedQuote);
   };
 
   const persistCustomsChanges = (updatedList: CustomsItem[]) => {
@@ -222,6 +182,85 @@ const YourMove: React.FC = () => {
       .filter(ci => ci.quantity > 0);
     setInventoryCustomItems(updated);
     void persistInventoryAndCustoms(inventorySelections, updated);
+  };
+
+
+  const buildCustomsFromInventory = (
+    selections: Record<string, number>,
+    custom: Array<{ id: string; label: string; volume: number; quantity: number }>
+  ): CustomsItem[] => {
+    const existingByDescription = new Map(itinerary.map(i => [i.description, i]));
+    const items: CustomsItem[] = [];
+
+    INVENTORY_CATEGORIES.forEach(category => {
+      category.items.forEach(item => {
+        const qty = selections[item.id] || 0;
+        if (qty > 0) {
+          const description = `${qty} x ${item.label}`;
+          const prev = existingByDescription.get(description);
+          items.push({ id: `inv-${item.id}`, description, value: prev?.value || '', boxNumber: prev?.boxNumber || '' });
+        }
+      });
+    });
+
+    custom.forEach(ci => {
+      if (ci.quantity > 0) {
+        const description = `${ci.quantity} x ${ci.label}`;
+        const prev = existingByDescription.get(description);
+        items.push({ id: ci.id, description, value: prev?.value || '', boxNumber: prev?.boxNumber || '' });
+      }
+    });
+
+    return items;
+  };
+
+  const persistInventoryAndCustoms = (
+    selections: Record<string, number>,
+    custom: Array<{ id: string; label: string; volume: number; quantity: number }>
+  ) => {
+    if (!activeMoveData) return;
+    const newCustoms = buildCustomsFromInventory(selections, custom);
+    setItinerary(newCustoms);
+    const updatedQuote = {
+      ...activeMoveData,
+      inventorySelections: selections,
+      inventoryCustomItems: custom,
+      customsList: newCustoms,
+    };
+    persistQuoteChanges(updatedQuote);
+  };
+
+  const updateInventoryQty = (itemId: string, delta: number) => {
+    const current = inventorySelections[itemId] || 0;
+    const next = Math.max(0, current + delta);
+    const updatedSelections = { ...inventorySelections };
+    if (next === 0) delete updatedSelections[itemId];
+    else updatedSelections[itemId] = next;
+    setInventorySelections(updatedSelections);
+    persistInventoryAndCustoms(updatedSelections, inventoryCustomItems);
+  };
+
+  const addCustomInventoryItem = () => {
+    if (!newInventoryLabel || newInventoryVolume === '' || Number(newInventoryVolume) <= 0) return;
+    const newItem = {
+      id: `custom-inv-${Date.now()}`,
+      label: newInventoryLabel,
+      volume: Number(newInventoryVolume),
+      quantity: 1,
+    };
+    const updated = [...inventoryCustomItems, newItem];
+    setInventoryCustomItems(updated);
+    persistInventoryAndCustoms(inventorySelections, updated);
+    setNewInventoryLabel('');
+    setNewInventoryVolume('');
+  };
+
+  const updateCustomInventoryQty = (id: string, delta: number) => {
+    const updated = inventoryCustomItems
+      .map(ci => (ci.id === id ? { ...ci, quantity: Math.max(0, ci.quantity + delta) } : ci))
+      .filter(ci => ci.quantity > 0);
+    setInventoryCustomItems(updated);
+    persistInventoryAndCustoms(inventorySelections, updated);
   };
 
   const handleLogin = (e: React.FormEvent) => {
@@ -363,7 +402,7 @@ const YourMove: React.FC = () => {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
               <div className="flex items-center space-x-3 text-blue-400 text-sm font-bold uppercase tracking-widest mb-2"><Truck size={16} /><span>Reference: {reference || activeMoveData?.ref}</span></div>
-              <h2 className="text-4xl font-black">Hello, {activeMoveData?.customerName || customerEmail || 'Valued Customer'}</h2>
+              <h2 className="text-4xl font-black">Hello, {customerEmail || 'Valued Customer'}</h2>
               <p className="text-slate-400 mt-2">Your relocation to <span className="text-white font-bold">{activeMoveData?.destination || 'Spain'}</span> is {activeMoveData?.status.toLowerCase() === 'quote saved' ? 'ready for booking.' : 'currently in progress.'}</p>
             </div>
             <div className="flex items-center space-x-4">

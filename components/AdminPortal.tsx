@@ -65,29 +65,6 @@ const AdminPortal: React.FC = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [selectedQuote, adminMessages]);
 
-
-  // Non-demo fallback sync (polling) for backend mode
-  useEffect(() => {
-    if (DEMO_MODE || !selectedQuote) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const allQuotes = await quoteStore.getAll();
-        const updated = allQuotes.find(q => q.ref === selectedQuote.ref);
-        if (!updated) return;
-
-        if (JSON.stringify(updated.messages) !== JSON.stringify(adminMessages)) {
-          setAdminMessages(updated.messages || []);
-        }
-        setQuotes(allQuotes.slice().reverse());
-      } catch {
-        // no-op
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [selectedQuote, adminMessages]);
-
   const loadQuotes = async () => {
     const saved = await quoteStore.getAll();
     setQuotes(saved.slice().reverse());
@@ -106,16 +83,9 @@ const AdminPortal: React.FC = () => {
     }, 800);
   };
 
-  const updateQuoteInStorage = async (updatedQuote: SavedQuote) => {
-    try {
-      setSyncStatus('saving');
-      await quoteStore.upsert(updatedQuote);
-      await loadQuotes();
-      setSyncStatus('saved');
-      setTimeout(() => setSyncStatus('idle'), 1200);
-    } catch {
-      setSyncStatus('error');
-    }
+  const updateQuoteInStorage = (updatedQuote: SavedQuote) => {
+    quoteStore.upsert(updatedQuote);
+    loadQuotes();
   };
 
   const updateQuoteStatus = (ref: string, newStatus: string) => {

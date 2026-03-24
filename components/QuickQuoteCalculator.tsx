@@ -107,7 +107,6 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
   const handleSaveQuote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !customerName.trim()) return;
-    setSaveError('');
 
     // Generate unique reference to avoid accidental cross-account collisions
     const existingQuotes = await quoteStore.getAll();
@@ -164,13 +163,10 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
       timestamp: Date.now()
     };
     
-    try {
-      await quoteStore.create(quoteData);
-      setSaveSuccess(true);
-      setIsSaving(false);
-    } catch (err) {
-      setSaveError('Unable to save estimate right now. Please try again.');
-    }
+    await quoteStore.create(quoteData);
+
+    setSaveSuccess(true);
+    setIsSaving(false);
   };
 
   const updateInventory = (id: string, delta: number) => {
@@ -442,7 +438,6 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
                     <span>Send Quote to Email</span>
                   </h4>
                   <div className="space-y-4">
-                    {saveError && <p className="text-xs font-bold text-red-600">{saveError}</p>}
                     <input
                       required
                       type="text"
