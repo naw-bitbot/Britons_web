@@ -11,7 +11,7 @@ import {
 // Fix: Declaring AdminPortal as a functional component with explicit React.FC type.
 const AdminPortal: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(DEMO_MODE ? 'admin123' : '');
   const [loading, setLoading] = useState(false);
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -176,6 +176,7 @@ const AdminPortal: React.FC = () => {
             </div>
             <h2 className="text-3xl font-bold text-slate-900">Admin Portal</h2>
             <p className="text-slate-500 mt-2 text-sm">Staff portal for Briton's Removals</p>
+            {DEMO_MODE && <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-2">Demo credentials preloaded</p>}
           </div>
           <form onSubmit={handleLogin} className="space-y-6">
             <div>

@@ -19,8 +19,8 @@ interface UserDocument {
 
 const YourMove: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [reference, setReference] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
+  const [reference, setReference] = useState(DEMO_MODE ? 'ESP-12345' : '');
+  const [customerEmail, setCustomerEmail] = useState(DEMO_MODE ? 'demo@example.com' : '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -207,6 +207,7 @@ const YourMove: React.FC = () => {
             </div>
             <h2 className="text-3xl font-bold text-slate-900">Your Move Portal</h2>
             <p className="text-slate-500 mt-2 text-sm">Enter your quote reference or move ID</p>
+            {DEMO_MODE && <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-2">Demo credentials preloaded</p>}
           </div>
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
