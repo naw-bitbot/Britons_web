@@ -10,10 +10,10 @@ const SERVICE_IMAGES: Record<string, string> = {
 };
 
 const SERVICE_IMAGE_ALTS: Record<string, string> = {
-  'full-house': 'Professional household removal team preparing a premium home move for European delivery',
-  'part-loads': 'Britons Removals MAN TGX 3 metallic navy blue truck with white solid-walled Britons trailer',
-  'packing': 'Professional removals staff in navy uniform protecting furniture and cartons for European transit',
-  'storage': 'Secure warehouse storage prepared for premium household removals and staged European delivery',
+  'full-house': 'Household removals team preparing a UK to Europe home move',
+  'part-loads': 'Britons removals vehicle prepared for a European part-load service',
+  'packing': 'Professional packing service protecting furniture and cartons for European transit',
+  'storage': 'Secure warehouse storage prepared for household removals and staged European delivery',
 };
 
 const DetailedServices: React.FC = () => {

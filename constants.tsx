@@ -8,7 +8,7 @@ export const COMPANY_INFO = {
   phone: "01332 208 008",
   email: "britons@me.com",
   address: "Unit 4, Little Chester Park, Alfreton Rd, Derby DE21 4AA, United Kingdom",
-  website: "britonsremovals.com",
+  website: "removaltospain.co.uk",
   spainExpertise: "Established European removals specialists handling household moves to and from Spain, France, Germany, Italy and destinations across Europe."
 };
 
@@ -237,25 +237,25 @@ export const DETAILED_SERVICES = [
 export const TESTIMONIALS: Testimonial[] = [
   {
     id: 1,
-    name: "Mark & Helen, Derby to Alicante",
+    name: "UK to Spain customer",
     text: "Britons moved our full house from Derbyshire to the Costa Blanca. What stood out was how organised the crew was from the first call to delivery. The paperwork was explained clearly, the loading was efficient, and everything arrived exactly as expected.",
     rating: 5
   },
   {
     id: 2,
-    name: "Rachel P., Kent to Dordogne",
+    name: "UK to France customer",
     text: "We were moving a family home to France and needed a company that understood the practical side, not just the sales talk. The packing was excellent, communication was straightforward, and the whole move felt under control.",
     rating: 5
   },
   {
     id: 3,
-    name: "Daniel & Emma, Manchester to Munich",
+    name: "UK to Germany customer",
     text: "Our move to Germany included awkward furniture, fragile items and a changing completion date. Britons handled it professionally and adapted without drama. The team was experienced, careful and easy to deal with.",
     rating: 5
   },
   {
     id: 4,
-    name: "Stephen T., Birmingham to Milan",
+    name: "UK to Italy customer",
     text: "We used Britons for a part-load move to northern Italy. It was well coordinated, competitively priced and everything arrived in good condition. You could tell they do this kind of work regularly.",
     rating: 5
   }
