@@ -8,8 +8,8 @@ export const COMPANY_INFO = {
   phone: "01332 208 008",
   email: "britons@me.com",
   address: "Unit 4, Little Chester Park, Alfreton Rd, Derby DE21 4AA, United Kingdom",
-  website: "removaltospain.co.uk",
-  spainExpertise: "40 years experience in removals to Spain, including Alicante, Malaga, Murcia, and Madrid."
+  website: "britonsremovals.com",
+  spainExpertise: "Established European removals specialists handling household moves to and from Spain, France, Germany, Italy and destinations across Europe."
 };
 
 // All volumes are now defined in Cubic Meters (m3)
@@ -183,80 +183,80 @@ export const DETAILED_SERVICES = [
   {
     id: 'full-house',
     icon: <Globe className="w-10 h-10 text-blue-600" />,
-    title: "Full House Removals",
-    description: "Our flagship service for complete household relocations between the UK and Spain.",
+    title: "Full Household Removals",
+    description: "A premium door-to-door service for complete household moves between the UK and Europe, planned carefully and delivered by experienced removals crews.",
     advantages: [
-      "Exclusive use of vehicle for your belongings",
-      "Direct door-to-door transit on your schedule",
-      "Flexible loading and delivery dates",
-      "Full customs clearance handling post-Brexit"
+      "Dedicated space for larger household removals",
+      "Loading planned around access, timing and property requirements",
+      "Clear delivery scheduling and route coordination",
+      "Support with customs and move documentation where required"
     ],
-    process: "We start with a professional survey, provide a bespoke transit plan, handle all export documentation, and deliver directly to your Spanish or UK address."
+    process: "We begin with a survey or detailed quote review, build a move plan around your volume and destination, prepare the paperwork, load securely, and deliver to your new home with the same care at the other end."
   },
   {
     id: 'part-loads',
     icon: <Truck className="w-10 h-10 text-blue-600" />,
-    title: "Part Load Services",
-    description: "A cost-effective solution for smaller moves or single items sharing space on our weekly Spanish runs.",
+    title: "Part Loads & Smaller Moves",
+    description: "A practical premium option for smaller household consignments, holiday-home contents or selected furniture when you do not need a full vehicle.",
     advantages: [
-      "Significant cost savings on transit",
-      "Regular weekly departures to all regions of Spain",
-      "Same high-quality handling as full loads",
-      "Ideal for holiday home furnishing"
+      "Cost-efficient for smaller move volumes",
+      "Regular European routes for efficient scheduling",
+      "Professional handling, inventory control and transit planning",
+      "Ideal for Spain, France, Germany, Italy and wider European destinations"
     ],
-    process: "Your items are professionally inventoried and shared with other consignments on our regular routes, reducing costs while maintaining safety."
+    process: "We assess the volume, assign the right route, protect and label the goods properly, and keep the move coordinated from collection through to delivery."
   },
   {
     id: 'packing',
     icon: <Box className="w-10 h-10 text-blue-600" />,
-    title: "Packing & Export Wrapping",
-    description: "Professional packing services designed specifically for long-distance international transit.",
+    title: "Packing for European Transit",
+    description: "Long-distance removals need more than standard house-moving packing, so we prepare furniture, cartons and fragile items for secure international transport.",
     advantages: [
-      "Specialist export-grade materials used",
-      "Fragile item protection (antiques, pianos)",
-      "Reduces risk of damage during sea/land transit",
-      "Unpacking service at your destination"
+      "Export wrapping for furniture and delicate items",
+      "Strong cartons and professional protective materials",
+      "Safer handling for antiques, artwork and breakables",
+      "Optional unpacking support at destination"
     ],
-    process: "Our trained crew packs everything using multi-layered bubble wrap and heavy-duty cartons, ensuring every item is cataloged for customs."
+    process: "Our team packs room by room, wraps vulnerable items properly, labels cartons clearly, and prepares your belongings for secure transport and, where needed, customs inspection."
   },
   {
     id: 'storage',
     icon: <Warehouse className="w-10 h-10 text-blue-600" />,
-    title: "Secure Storage Solutions",
-    description: "Safe, containerized storage available in both our UK (Derby) and Spanish depots.",
+    title: "Storage Between Moves",
+    description: "Secure storage for customers whose moving dates do not align perfectly, whether you need flexibility for completion delays, phased relocation or later delivery.",
     advantages: [
-      "24/7 CCTV and alarm monitoring",
-      "Climate-controlled environments",
-      "Short-term and long-term options",
-      "Inventory-linked retrieval"
+      "Short-term and longer-term storage options",
+      "Secure handling from collection into storage and back out again",
+      "Suitable for UK departures and European arrivals",
+      "Keeps your move flexible when dates change"
     ],
-    process: "Goods are loaded directly into storage containers at your home, sealed, and stored in our secure warehouse until you are ready for delivery."
+    process: "We collect, protect and inventory the goods, place them into secure storage, and redeliver when you are ready to complete the move."
   }
 ];
 
 export const TESTIMONIALS: Testimonial[] = [
   {
     id: 1,
-    name: "Hamy Hanon",
-    text: "Britons handled our move from Derby to Malaga perfectly. After Brexit, we were worried about paperwork, but they took care of everything. Highly recommended!",
+    name: "Mark & Helen, Derby to Alicante",
+    text: "Britons moved our full house from Derbyshire to the Costa Blanca. What stood out was how organised the crew was from the first call to delivery. The paperwork was explained clearly, the loading was efficient, and everything arrived exactly as expected.",
     rating: 5
   },
   {
     id: 2,
-    name: "Robert & Sheila Thompson",
-    text: "The part-load service was brilliant for moving our garden furniture to our villa in Alicante. Professional, polite, and very well priced.",
+    name: "Rachel P., Kent to Dordogne",
+    text: "We were moving a family home to France and needed a company that understood the practical side, not just the sales talk. The packing was excellent, communication was straightforward, and the whole move felt under control.",
     rating: 5
   },
   {
     id: 3,
-    name: "John Davies",
-    text: "Outstanding service. The packing team was efficient and treated our antiques with incredible care. The storage in Derby was a lifesaver during our chain delay.",
+    name: "Daniel & Emma, Manchester to Munich",
+    text: "Our move to Germany included awkward furniture, fragile items and a changing completion date. Britons handled it professionally and adapted without drama. The team was experienced, careful and easy to deal with.",
     rating: 5
   },
   {
     id: 4,
-    name: "Elena Rodriguez",
-    text: "Moved my entire apartment from Madrid to London. Excellent communication throughout. The drivers were very helpful and punctual.",
+    name: "Stephen T., Birmingham to Milan",
+    text: "We used Britons for a part-load move to northern Italy. It was well coordinated, competitively priced and everything arrived in good condition. You could tell they do this kind of work regularly.",
     rating: 5
   }
 ];
