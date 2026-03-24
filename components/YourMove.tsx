@@ -1,10 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { INVENTORY_CATEGORIES } from '../constants';
 import { DEMO_MODE, STORAGE_KEYS } from '../config';
-import { INVENTORY_CATEGORIES } from '../constants';
 import { quoteStore, SavedQuote, CustomsItem, Message } from '../services';
-import { INVENTORY_CATEGORIES } from '../constants';
 import { 
   Lock, CheckCircle2, Truck, ClipboardList, MessageSquare, 
   Calendar, FileText, Send, Plus, Trash2, AlertCircle, 
@@ -324,7 +321,7 @@ const YourMove: React.FC = () => {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
               <div className="flex items-center space-x-3 text-blue-400 text-sm font-bold uppercase tracking-widest mb-2"><Truck size={16} /><span>Reference: {reference || activeMoveData?.ref}</span></div>
-              <h2 className="text-4xl font-black">Hello, {activeMoveData?.customerName || customerEmail || 'Valued Customer'}</h2>
+              <h2 className="text-4xl font-black">Hello, {customerEmail || 'Valued Customer'}</h2>
               <p className="text-slate-400 mt-2">Your relocation to <span className="text-white font-bold">{activeMoveData?.destination || 'Spain'}</span> is {activeMoveData?.status.toLowerCase() === 'quote saved' ? 'ready for booking.' : 'currently in progress.'}</p>
             </div>
             <div className="flex items-center space-x-4">
