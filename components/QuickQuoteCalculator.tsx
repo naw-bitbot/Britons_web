@@ -37,6 +37,7 @@ const QuickQuoteCalculator: React.FC<QuickQuoteCalculatorProps> = ({ onRequestFu
   const [email, setEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [generatedRef, setGeneratedRef] = useState('');
   
   // Custom item input state

@@ -48,6 +48,8 @@ const YourMove: React.FC = () => {
   // Chat State
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [syncError, setSyncError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -90,7 +92,7 @@ const YourMove: React.FC = () => {
   const persistCustomsChanges = (updatedList: CustomsItem[]) => {
     if (!activeMoveData) return;
     const updatedQuote = { ...activeMoveData, customsList: updatedList };
-    persistQuoteChanges(updatedQuote);
+    void persistQuoteChanges(updatedQuote);
     
     // Visual feedback for save
     setIsSavingCustoms(true);
@@ -100,7 +102,86 @@ const YourMove: React.FC = () => {
   const updateItemInline = (id: string, field: keyof CustomsItem, value: string) => {
     const updated = itinerary.map(item => item.id === id ? { ...item, [field]: value } : item);
     setItinerary(updated);
-    persistCustomsChanges(updated);
+    void persistCustomsChanges(updated);
+  };
+
+
+  const buildCustomsFromInventory = (
+    selections: Record<string, number>,
+    custom: Array<{ id: string; label: string; volume: number; quantity: number }>
+  ): CustomsItem[] => {
+    const existingByDescription = new Map(itinerary.map(i => [i.description, i]));
+    const items: CustomsItem[] = [];
+
+    INVENTORY_CATEGORIES.forEach(category => {
+      category.items.forEach(item => {
+        const qty = selections[item.id] || 0;
+        if (qty > 0) {
+          const description = `${qty} x ${item.label}`;
+          const prev = existingByDescription.get(description);
+          items.push({ id: `inv-${item.id}`, description, value: prev?.value || '', boxNumber: prev?.boxNumber || '' });
+        }
+      });
+    });
+
+    custom.forEach(ci => {
+      if (ci.quantity > 0) {
+        const description = `${ci.quantity} x ${ci.label}`;
+        const prev = existingByDescription.get(description);
+        items.push({ id: ci.id, description, value: prev?.value || '', boxNumber: prev?.boxNumber || '' });
+      }
+    });
+
+    return items;
+  };
+
+  const persistInventoryAndCustoms = (
+    selections: Record<string, number>,
+    custom: Array<{ id: string; label: string; volume: number; quantity: number }>
+  ) => {
+    if (!activeMoveData) return;
+    const newCustoms = buildCustomsFromInventory(selections, custom);
+    setItinerary(newCustoms);
+    const updatedQuote = {
+      ...activeMoveData,
+      inventorySelections: selections,
+      inventoryCustomItems: custom,
+      customsList: newCustoms,
+    };
+    void persistQuoteChanges(updatedQuote);
+  };
+
+  const updateInventoryQty = (itemId: string, delta: number) => {
+    const current = inventorySelections[itemId] || 0;
+    const next = Math.max(0, current + delta);
+    const updatedSelections = { ...inventorySelections };
+    if (next === 0) delete updatedSelections[itemId];
+    else updatedSelections[itemId] = next;
+    setInventorySelections(updatedSelections);
+    void persistInventoryAndCustoms(updatedSelections, inventoryCustomItems);
+  };
+
+  const addCustomInventoryItem = () => {
+    if (!newInventoryLabel || newInventoryVolume === '' || Number(newInventoryVolume) <= 0) return;
+    const newItem = {
+      id: `custom-inv-${Date.now()}`,
+      label: newInventoryLabel,
+      volume: Number(newInventoryVolume),
+      quantity: 1,
+    };
+    const updated = [...inventoryCustomItems, newItem];
+    setInventoryCustomItems(updated);
+    void persistInventoryAndCustoms(inventorySelections, updated);
+    setNewInventoryLabel('');
+    setNewInventoryVolume('');
+  };
+
+  const updateCustomInventoryQty = (id: string, delta: number) => {
+    const updated = inventoryCustomItems
+      .map(ci => (ci.id === id ? { ...ci, quantity: Math.max(0, ci.quantity + delta) } : ci))
+      .filter(ci => ci.quantity > 0);
+    setInventoryCustomItems(updated);
+    void persistInventoryAndCustoms(inventorySelections, updated);
   };
 
 
@@ -229,7 +310,7 @@ const YourMove: React.FC = () => {
     if (newItem.description && newItem.value) {
       const updatedList = [...itinerary, { ...newItem, id: Date.now().toString() }];
       setItinerary(updatedList);
-      persistCustomsChanges(updatedList);
+      void persistCustomsChanges(updatedList);
       setNewItem({ description: '', value: '', boxNumber: '' });
     }
   };
@@ -254,7 +335,7 @@ const YourMove: React.FC = () => {
       setMessages(updatedMessages);
       
       const updatedQuote = { ...activeMoveData, messages: updatedMessages };
-      persistQuoteChanges(updatedQuote);
+      void persistQuoteChanges(updatedQuote);
       setNewMessage('');
       setTimeout(scrollToBottom, 100);
     }
@@ -349,6 +430,11 @@ const YourMove: React.FC = () => {
           </div>
 
           <div className="flex-grow p-6 md:p-10">
+            {(syncStatus === 'saving' || syncStatus === 'saved' || syncStatus === 'error') && (
+              <div className={`mb-4 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${syncStatus === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : syncStatus === 'saved' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
+                {syncStatus === 'saving' ? 'Syncing changes…' : syncStatus === 'saved' ? 'SYNC ACTIVE: Changes saved' : syncError || 'Sync failed'}
+              </div>
+            )}
             {activeTab === 'overview' && (
               <div className="space-y-8 animate-fade-in">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

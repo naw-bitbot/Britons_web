@@ -26,6 +26,7 @@ const AdminPortal: React.FC = () => {
   // Chat States
   const [adminMessages, setAdminMessages] = useState<Message[]>([]);
   const [adminNewMessage, setAdminNewMessage] = useState('');
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -91,7 +92,7 @@ const AdminPortal: React.FC = () => {
     const quote = quotes.find(q => q.ref === ref);
     if (!quote) return;
     const updated = { ...quote, status: newStatus };
-    updateQuoteInStorage(updated);
+    void updateQuoteInStorage(updated);
     if (selectedQuote?.ref === ref) {
       setSelectedQuote(updated);
     }
@@ -100,7 +101,7 @@ const AdminPortal: React.FC = () => {
   const saveCustomsChanges = () => {
     if (!selectedQuote) return;
     const updated = { ...selectedQuote, customsList: editingCustoms };
-    updateQuoteInStorage(updated);
+    void updateQuoteInStorage(updated);
     setSelectedQuote(updated);
     alert('Customs manifest updated successfully.');
   };
@@ -120,7 +121,7 @@ const AdminPortal: React.FC = () => {
     setAdminMessages(updatedMessages);
     
     const updatedQuote = { ...selectedQuote, messages: updatedMessages };
-    updateQuoteInStorage(updatedQuote);
+    void updateQuoteInStorage(updatedQuote);
     setSelectedQuote(updatedQuote);
     setAdminNewMessage('');
     setTimeout(scrollToBottom, 100);
@@ -212,6 +213,7 @@ const AdminPortal: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center space-x-3">
+              {syncStatus !== 'idle' && <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded ${syncStatus === 'error' ? 'bg-red-500/20 text-red-300' : syncStatus === 'saved' ? 'bg-green-500/20 text-green-300' : 'bg-blue-500/20 text-blue-300'}`}>{syncStatus === 'saving' ? 'Syncing…' : syncStatus === 'saved' ? 'Sync Active' : 'Sync Error'}</span>}
               <button onClick={loadQuotes} className="p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors" title="Refresh Data">
                 <RefreshCw size={20} />
               </button>
