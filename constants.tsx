@@ -8,7 +8,7 @@ export const COMPANY_INFO = {
   phone: "01332 208 008",
   email: "britons@me.com",
   address: "Unit 4, Little Chester Park, Alfreton Rd, Derby DE21 4AA, United Kingdom",
-  website: "removaltospain.co.uk",
+  website: "britonsremovals.com",
   spainExpertise: "Established European removals specialists handling household moves to and from Spain, France, Germany, Italy and destinations across Europe."
 };
 
