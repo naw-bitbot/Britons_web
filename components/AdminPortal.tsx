@@ -282,7 +282,7 @@ const AdminPortal: React.FC = () => {
                         filteredQuotes.map(quote => (
                           <tr key={quote.ref} className="hover:bg-slate-50/50 transition-colors group">
                             <td className="px-6 py-5"><span className="font-mono font-black text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs">{quote.ref}</span></td>
-                            <td className="px-6 py-5"><p className="text-sm font-bold text-slate-900">{quote.email}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{quote.date || 'No date set'}</p></td>
+                            <td className="px-6 py-5"><p className="text-sm font-bold text-slate-900">{quote.customerName || 'Customer'}</p><p className="text-xs text-slate-500">{quote.email}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{quote.date || 'No date set'}</p></td>
                             <td className="px-6 py-5"><p className="text-xs font-medium text-slate-600">{quote.origin} → {quote.destination}</p><p className="text-[10px] text-slate-400 font-bold">{quote.volume} m³</p></td>
                             <td className="px-6 py-5"><span className="text-sm font-black text-slate-900">£{quote.price.toLocaleString()}</span></td>
                             <td className="px-6 py-5"><span className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${quote.status === 'Quote Accepted' ? 'bg-green-100 text-green-700' : quote.status === 'Quote Saved' ? 'bg-blue-100 text-blue-700' : quote.status === 'Archived' ? 'bg-slate-200 text-slate-600' : 'bg-slate-100 text-slate-700'}`}>{quote.status}</span></td>
@@ -371,7 +371,7 @@ const AdminPortal: React.FC = () => {
                           <span>Client Profile</span>
                        </h4>
                        <div className="space-y-3">
-                          <div><p className="text-[10px] font-bold text-slate-400 uppercase">Email</p><p className="text-sm font-black text-slate-900 truncate">{selectedQuote.email}</p></div>
+                          <div><p className="text-[10px] font-bold text-slate-400 uppercase">Customer</p><p className="text-sm font-black text-slate-900 truncate">{selectedQuote.customerName || 'Customer'}</p><p className="text-xs text-slate-500 truncate">{selectedQuote.email}</p></div>
                           <div><p className="text-[10px] font-bold text-slate-400 uppercase">Target Date</p><p className="text-sm font-black text-slate-900">{selectedQuote.date || 'TBC'}</p></div>
                           <div><p className="text-[10px] font-bold text-slate-400 uppercase">Volume</p><p className="text-sm font-black text-slate-900">{selectedQuote.volume} m³</p></div>
                           <div><p className="text-[10px] font-bold text-slate-400 uppercase">Status</p>
