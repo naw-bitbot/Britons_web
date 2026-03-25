@@ -84,9 +84,18 @@ const YourMove: React.FC = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [activeMoveData, messages]);
 
-  const persistQuoteChanges = (updatedQuote: SavedQuote) => {
-    quoteStore.upsert(updatedQuote);
-    setActiveMoveData(updatedQuote);
+  const persistQuoteChanges = async (updatedQuote: SavedQuote) => {
+    setSyncStatus('saving');
+    setSyncError('');
+    try {
+      await quoteStore.upsert(updatedQuote);
+      setActiveMoveData(updatedQuote);
+      setSyncStatus('saved');
+      setTimeout(() => setSyncStatus('idle'), 1200);
+    } catch (err) {
+      setSyncStatus('error');
+      setSyncError(err instanceof Error ? err.message : 'Unable to save changes');
+    }
   };
 
   const persistCustomsChanges = (updatedList: CustomsItem[]) => {
