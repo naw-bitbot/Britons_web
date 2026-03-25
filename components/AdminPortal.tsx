@@ -56,6 +56,18 @@ const AdminPortal: React.FC = () => {
   }, [isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated || trips.length === 0) return;
+    const acceptedRefs = new Set(quotes.filter(q => q.status === 'Quote Accepted').map(q => q.ref));
+    const sanitizedTrips = trips.map(trip => ({
+      ...trip,
+      quoteRefs: trip.quoteRefs.filter(ref => acceptedRefs.has(ref)),
+    }));
+    if (JSON.stringify(sanitizedTrips) !== JSON.stringify(trips)) {
+      persistTrips(sanitizedTrips);
+    }
+  }, [isAuthenticated, quotes, trips]);
+
+  useEffect(() => {
     if (selectedQuote) {
       setEditingCustoms(selectedQuote.customsList || []);
       setAdminMessages(selectedQuote.messages || []);
@@ -147,6 +159,21 @@ const AdminPortal: React.FC = () => {
     persistTrips(trips.filter(trip => trip.id !== tripId));
   };
 
+  const reorderTripStop = (tripId: string, quoteRef: string, direction: 'up' | 'down') => {
+    const updatedTrips = trips.map(trip => {
+      if (trip.id !== tripId) return trip;
+      const currentIndex = trip.quoteRefs.indexOf(quoteRef);
+      if (currentIndex === -1) return trip;
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= trip.quoteRefs.length) return trip;
+
+      const reordered = [...trip.quoteRefs];
+      [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[currentIndex]];
+      return { ...trip, quoteRefs: reordered };
+    });
+    persistTrips(updatedTrips);
+  };
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -170,6 +197,9 @@ const AdminPortal: React.FC = () => {
     if (!quote) return;
     const updated = { ...quote, status: newStatus };
     void updateQuoteInStorage(updated);
+    if (newStatus !== 'Quote Accepted') {
+      removeQuoteFromTrip(ref);
+    }
     if (selectedQuote?.ref === ref) {
       setSelectedQuote(updated);
     }
@@ -223,6 +253,7 @@ const AdminPortal: React.FC = () => {
       const newQuotes = quotes.filter((q: SavedQuote) => q.ref !== ref);
       quoteStore.replaceAll(newQuotes);
       setQuotes(newQuotes.slice().reverse());
+      removeQuoteFromTrip(ref);
       if (selectedQuote?.ref === ref) setSelectedQuote(null);
     }
   };
@@ -475,12 +506,19 @@ const AdminPortal: React.FC = () => {
                           </div>
                         </div>
                         <div className="space-y-2">
+                          {trip.quoteRefs.map((ref, index) => {
                           {trip.quoteRefs.map(ref => {
                             const quote = quotes.find(q => q.ref === ref);
                             if (!quote) return null;
                             return (
                               <div key={ref} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                                 <div>
+                                  <p className="text-xs font-black text-slate-900"><span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 mr-1.5">{index + 1}</span>{quote.ref} • {quote.customerName || quote.email}</p>
+                                  <p className="text-xs text-slate-500">{quote.origin} → {quote.destination} • {quote.volume} m³</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button onClick={() => reorderTripStop(trip.id, ref, 'up')} className="text-xs px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100" title="Move stop up">↑</button>
+                                  <button onClick={() => reorderTripStop(trip.id, ref, 'down')} className="text-xs px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100" title="Move stop down">↓</button>
                                   <p className="text-xs font-black text-slate-900">{quote.ref} • {quote.customerName || quote.email}</p>
                                   <p className="text-xs text-slate-500">{quote.origin} → {quote.destination} • {quote.volume} m³</p>
                                 </div>
@@ -496,6 +534,15 @@ const AdminPortal: React.FC = () => {
                             );
                           })}
                           {trip.quoteRefs.length === 0 && <p className="text-xs text-slate-400 italic">No customers assigned to this trip yet.</p>}
+                        </div>
+                        <div className="mt-4 border-t border-slate-100 pt-3">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Trip Notes</label>
+                          <textarea
+                            value={trip.notes || ''}
+                            onChange={(e) => updateTrip(trip.id, { notes: e.target.value })}
+                            placeholder="Add route notes, access details, or loading order reminders."
+                            className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 min-h-20 outline-none focus:ring-2 focus:ring-slate-900"
+                          />
                         </div>
                         {trip.notes && <p className="text-xs text-slate-500 mt-4 border-t border-slate-100 pt-3"><span className="font-bold text-slate-700">Notes:</span> {trip.notes}</p>}
                       </div>

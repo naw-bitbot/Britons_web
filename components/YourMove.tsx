@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DEMO_MODE, STORAGE_KEYS } from '../config';
 import { quoteStore, SavedQuote, CustomsItem, Message } from '../services';
+import { INVENTORY_CATEGORIES } from '../constants';
 import { 
   Lock, CheckCircle2, Truck, ClipboardList, MessageSquare, 
   Calendar, FileText, Send, Plus, Trash2, AlertCircle, 
@@ -119,7 +120,7 @@ const YourMove: React.FC = () => {
     selections: Record<string, number>,
     custom: Array<{ id: string; label: string; volume: number; quantity: number }>
   ): CustomsItem[] => {
-    const existingByDescription = new Map(itinerary.map(i => [i.description, i]));
+    const existingByDescription = new Map<string, CustomsItem>(itinerary.map(i => [i.description, i]));
     const items: CustomsItem[] = [];
 
     INVENTORY_CATEGORIES.forEach(category => {
