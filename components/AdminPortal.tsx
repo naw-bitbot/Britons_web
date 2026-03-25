@@ -507,6 +507,7 @@ const AdminPortal: React.FC = () => {
                         </div>
                         <div className="space-y-2">
                           {trip.quoteRefs.map((ref, index) => {
+                          {trip.quoteRefs.map(ref => {
                             const quote = quotes.find(q => q.ref === ref);
                             if (!quote) return null;
                             return (
@@ -518,6 +519,10 @@ const AdminPortal: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                   <button onClick={() => reorderTripStop(trip.id, ref, 'up')} className="text-xs px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100" title="Move stop up">↑</button>
                                   <button onClick={() => reorderTripStop(trip.id, ref, 'down')} className="text-xs px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100" title="Move stop down">↓</button>
+                                  <p className="text-xs font-black text-slate-900">{quote.ref} • {quote.customerName || quote.email}</p>
+                                  <p className="text-xs text-slate-500">{quote.origin} → {quote.destination} • {quote.volume} m³</p>
+                                </div>
+                                <div className="flex items-center gap-2">
                                   <select value={trip.id} onChange={(e) => moveQuoteToTrip(ref, e.target.value)} className="text-xs bg-white border border-slate-200 rounded-lg px-2 py-1">
                                     {trips.map(moveTarget => (
                                       <option key={moveTarget.id} value={moveTarget.id}>{moveTarget.name}</option>
@@ -539,6 +544,7 @@ const AdminPortal: React.FC = () => {
                             className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 min-h-20 outline-none focus:ring-2 focus:ring-slate-900"
                           />
                         </div>
+                        {trip.notes && <p className="text-xs text-slate-500 mt-4 border-t border-slate-100 pt-3"><span className="font-bold text-slate-700">Notes:</span> {trip.notes}</p>}
                       </div>
                     ))}
                     {trips.length === 0 && <p className="text-sm text-slate-400 italic">No trips created yet.</p>}
