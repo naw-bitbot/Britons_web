@@ -29,6 +29,9 @@ export interface SavedQuote {
   timestamp?: number;
   customsList?: CustomsItem[];
   messages?: Message[];
+  customerName?: string;
+  inventorySelections?: Record<string, number>;
+  inventoryCustomItems?: Array<{ id: string; label: string; volume: number; quantity: number }>;
 }
 
 const getDemoQuotes = (): SavedQuote[] => {

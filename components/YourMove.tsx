@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DEMO_MODE, STORAGE_KEYS } from '../config';
 import { quoteStore, SavedQuote, CustomsItem, Message } from '../services';
+import { INVENTORY_CATEGORIES } from '../constants';
 import { 
   Lock, CheckCircle2, Truck, ClipboardList, MessageSquare, 
   Calendar, FileText, Send, Plus, Trash2, AlertCircle, 
@@ -84,9 +85,18 @@ const YourMove: React.FC = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [activeMoveData, messages]);
 
-  const persistQuoteChanges = (updatedQuote: SavedQuote) => {
-    quoteStore.upsert(updatedQuote);
-    setActiveMoveData(updatedQuote);
+  const persistQuoteChanges = async (updatedQuote: SavedQuote) => {
+    setSyncStatus('saving');
+    setSyncError('');
+    try {
+      await quoteStore.upsert(updatedQuote);
+      setActiveMoveData(updatedQuote);
+      setSyncStatus('saved');
+      setTimeout(() => setSyncStatus('idle'), 1200);
+    } catch (err) {
+      setSyncStatus('error');
+      setSyncError(err instanceof Error ? err.message : 'Unable to save changes');
+    }
   };
 
   const persistCustomsChanges = (updatedList: CustomsItem[]) => {
@@ -110,7 +120,7 @@ const YourMove: React.FC = () => {
     selections: Record<string, number>,
     custom: Array<{ id: string; label: string; volume: number; quantity: number }>
   ): CustomsItem[] => {
-    const existingByDescription = new Map(itinerary.map(i => [i.description, i]));
+    const existingByDescription = new Map<string, CustomsItem>(itinerary.map(i => [i.description, i]));
     const items: CustomsItem[] = [];
 
     INVENTORY_CATEGORIES.forEach(category => {
@@ -184,84 +194,6 @@ const YourMove: React.FC = () => {
     void persistInventoryAndCustoms(inventorySelections, updated);
   };
 
-
-  const buildCustomsFromInventory = (
-    selections: Record<string, number>,
-    custom: Array<{ id: string; label: string; volume: number; quantity: number }>
-  ): CustomsItem[] => {
-    const existingByDescription = new Map(itinerary.map(i => [i.description, i]));
-    const items: CustomsItem[] = [];
-
-    INVENTORY_CATEGORIES.forEach(category => {
-      category.items.forEach(item => {
-        const qty = selections[item.id] || 0;
-        if (qty > 0) {
-          const description = `${qty} x ${item.label}`;
-          const prev = existingByDescription.get(description);
-          items.push({ id: `inv-${item.id}`, description, value: prev?.value || '', boxNumber: prev?.boxNumber || '' });
-        }
-      });
-    });
-
-    custom.forEach(ci => {
-      if (ci.quantity > 0) {
-        const description = `${ci.quantity} x ${ci.label}`;
-        const prev = existingByDescription.get(description);
-        items.push({ id: ci.id, description, value: prev?.value || '', boxNumber: prev?.boxNumber || '' });
-      }
-    });
-
-    return items;
-  };
-
-  const persistInventoryAndCustoms = (
-    selections: Record<string, number>,
-    custom: Array<{ id: string; label: string; volume: number; quantity: number }>
-  ) => {
-    if (!activeMoveData) return;
-    const newCustoms = buildCustomsFromInventory(selections, custom);
-    setItinerary(newCustoms);
-    const updatedQuote = {
-      ...activeMoveData,
-      inventorySelections: selections,
-      inventoryCustomItems: custom,
-      customsList: newCustoms,
-    };
-    persistQuoteChanges(updatedQuote);
-  };
-
-  const updateInventoryQty = (itemId: string, delta: number) => {
-    const current = inventorySelections[itemId] || 0;
-    const next = Math.max(0, current + delta);
-    const updatedSelections = { ...inventorySelections };
-    if (next === 0) delete updatedSelections[itemId];
-    else updatedSelections[itemId] = next;
-    setInventorySelections(updatedSelections);
-    persistInventoryAndCustoms(updatedSelections, inventoryCustomItems);
-  };
-
-  const addCustomInventoryItem = () => {
-    if (!newInventoryLabel || newInventoryVolume === '' || Number(newInventoryVolume) <= 0) return;
-    const newItem = {
-      id: `custom-inv-${Date.now()}`,
-      label: newInventoryLabel,
-      volume: Number(newInventoryVolume),
-      quantity: 1,
-    };
-    const updated = [...inventoryCustomItems, newItem];
-    setInventoryCustomItems(updated);
-    persistInventoryAndCustoms(inventorySelections, updated);
-    setNewInventoryLabel('');
-    setNewInventoryVolume('');
-  };
-
-  const updateCustomInventoryQty = (id: string, delta: number) => {
-    const updated = inventoryCustomItems
-      .map(ci => (ci.id === id ? { ...ci, quantity: Math.max(0, ci.quantity + delta) } : ci))
-      .filter(ci => ci.quantity > 0);
-    setInventoryCustomItems(updated);
-    persistInventoryAndCustoms(inventorySelections, updated);
-  };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -395,6 +327,10 @@ const YourMove: React.FC = () => {
     );
   }
 
+  const normalizedMoveStatus = (activeMoveData?.status || '').toLowerCase();
+  const moveProgressCopy = normalizedMoveStatus === 'quote saved' ? 'ready for booking.' : 'currently in progress.';
+  const formattedEstimatedTotal = typeof activeMoveData?.price === 'number' ? activeMoveData.price.toLocaleString() : '0';
+
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       <div className="bg-slate-900 text-white pt-12 pb-24">
@@ -403,7 +339,7 @@ const YourMove: React.FC = () => {
             <div>
               <div className="flex items-center space-x-3 text-blue-400 text-sm font-bold uppercase tracking-widest mb-2"><Truck size={16} /><span>Reference: {reference || activeMoveData?.ref}</span></div>
               <h2 className="text-4xl font-black">Hello, {customerEmail || 'Valued Customer'}</h2>
-              <p className="text-slate-400 mt-2">Your relocation to <span className="text-white font-bold">{activeMoveData?.destination || 'Spain'}</span> is {activeMoveData?.status.toLowerCase() === 'quote saved' ? 'ready for booking.' : 'currently in progress.'}</p>
+              <p className="text-slate-400 mt-2">Your relocation to <span className="text-white font-bold">{activeMoveData?.destination || 'Spain'}</span> is {moveProgressCopy}</p>
             </div>
             <div className="flex items-center space-x-4">
               <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-md">
@@ -451,7 +387,7 @@ const YourMove: React.FC = () => {
                       <div className="flex justify-between border-b border-slate-200 pb-2"><span className="text-slate-500 text-sm">Origin</span><span className="font-bold text-slate-900">{activeMoveData?.origin}</span></div>
                       <div className="flex justify-between border-b border-slate-200 pb-2"><span className="text-slate-500 text-sm">Destination</span><span className="font-bold text-slate-900">{activeMoveData?.destination}</span></div>
                       <div className="flex justify-between border-b border-slate-200 pb-2"><span className="text-slate-500 text-sm">Volume</span><span className="font-bold text-slate-900">{activeMoveData?.volume} m³</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500 text-sm">Estimated Total</span><span className="font-bold text-blue-600 text-lg">£{activeMoveData?.price.toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500 text-sm">Estimated Total</span><span className="font-bold text-blue-600 text-lg">£{formattedEstimatedTotal}</span></div>
                     </div>
                   </div>
                 </div>
