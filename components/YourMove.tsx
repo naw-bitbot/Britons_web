@@ -326,6 +326,10 @@ const YourMove: React.FC = () => {
     );
   }
 
+  const normalizedMoveStatus = (activeMoveData?.status || '').toLowerCase();
+  const moveProgressCopy = normalizedMoveStatus === 'quote saved' ? 'ready for booking.' : 'currently in progress.';
+  const formattedEstimatedTotal = typeof activeMoveData?.price === 'number' ? activeMoveData.price.toLocaleString() : '0';
+
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       <div className="bg-slate-900 text-white pt-12 pb-24">
@@ -334,7 +338,7 @@ const YourMove: React.FC = () => {
             <div>
               <div className="flex items-center space-x-3 text-blue-400 text-sm font-bold uppercase tracking-widest mb-2"><Truck size={16} /><span>Reference: {reference || activeMoveData?.ref}</span></div>
               <h2 className="text-4xl font-black">Hello, {customerEmail || 'Valued Customer'}</h2>
-              <p className="text-slate-400 mt-2">Your relocation to <span className="text-white font-bold">{activeMoveData?.destination || 'Spain'}</span> is {activeMoveData?.status.toLowerCase() === 'quote saved' ? 'ready for booking.' : 'currently in progress.'}</p>
+              <p className="text-slate-400 mt-2">Your relocation to <span className="text-white font-bold">{activeMoveData?.destination || 'Spain'}</span> is {moveProgressCopy}</p>
             </div>
             <div className="flex items-center space-x-4">
               <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-md">
@@ -382,7 +386,7 @@ const YourMove: React.FC = () => {
                       <div className="flex justify-between border-b border-slate-200 pb-2"><span className="text-slate-500 text-sm">Origin</span><span className="font-bold text-slate-900">{activeMoveData?.origin}</span></div>
                       <div className="flex justify-between border-b border-slate-200 pb-2"><span className="text-slate-500 text-sm">Destination</span><span className="font-bold text-slate-900">{activeMoveData?.destination}</span></div>
                       <div className="flex justify-between border-b border-slate-200 pb-2"><span className="text-slate-500 text-sm">Volume</span><span className="font-bold text-slate-900">{activeMoveData?.volume} m³</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500 text-sm">Estimated Total</span><span className="font-bold text-blue-600 text-lg">£{activeMoveData?.price.toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500 text-sm">Estimated Total</span><span className="font-bold text-blue-600 text-lg">£{formattedEstimatedTotal}</span></div>
                     </div>
                   </div>
                 </div>
