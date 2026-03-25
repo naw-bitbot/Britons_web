@@ -10,13 +10,28 @@ import {
 
 // Fix: Declaring AdminPortal as a functional component with explicit React.FC type.
 const AdminPortal: React.FC = () => {
+  interface Trip {
+    id: string;
+    name: string;
+    departureDate: string;
+    status: 'draft' | 'planned' | 'in_transit' | 'completed';
+    quoteRefs: string[];
+    notes?: string;
+  }
+
+  const TRIPS_STORAGE_KEY = 'britons_admin_trips';
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState(DEMO_MODE ? 'admin123' : '');
   const [loading, setLoading] = useState(false);
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'quotes' | 'database'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'quotes' | 'trips' | 'database'>('dashboard');
   const [selectedQuote, setSelectedQuote] = useState<SavedQuote | null>(null);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [newTripName, setNewTripName] = useState('');
+  const [newTripDate, setNewTripDate] = useState('');
+  const [newTripNotes, setNewTripNotes] = useState('');
+  const [selectedTripCustomers, setSelectedTripCustomers] = useState<string[]>([]);
   
   // Detail Modal States
   const [modalTab, setModalTab] = useState<'customs' | 'chat'>('customs');
@@ -36,6 +51,7 @@ const AdminPortal: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated) {
       loadQuotes();
+      loadTrips();
     }
   }, [isAuthenticated]);
 
@@ -68,6 +84,67 @@ const AdminPortal: React.FC = () => {
   const loadQuotes = async () => {
     const saved = await quoteStore.getAll();
     setQuotes(saved.slice().reverse());
+  };
+
+  const loadTrips = () => {
+    const raw = localStorage.getItem(TRIPS_STORAGE_KEY);
+    const parsed: Trip[] = JSON.parse(raw || '[]');
+    setTrips(parsed);
+  };
+
+  const persistTrips = (updatedTrips: Trip[]) => {
+    localStorage.setItem(TRIPS_STORAGE_KEY, JSON.stringify(updatedTrips));
+    setTrips(updatedTrips);
+  };
+
+  const createTrip = () => {
+    if (!newTripName.trim() || !newTripDate) return;
+
+    const trip: Trip = {
+      id: Date.now().toString(),
+      name: newTripName.trim(),
+      departureDate: newTripDate,
+      status: 'draft',
+      quoteRefs: selectedTripCustomers,
+      notes: newTripNotes.trim(),
+    };
+
+    const movedQuotes = new Set(selectedTripCustomers);
+    const strippedTrips = trips.map(existing => ({
+      ...existing,
+      quoteRefs: existing.quoteRefs.filter(ref => !movedQuotes.has(ref)),
+    }));
+
+    persistTrips([trip, ...strippedTrips]);
+    setNewTripName('');
+    setNewTripDate('');
+    setNewTripNotes('');
+    setSelectedTripCustomers([]);
+  };
+
+  const updateTrip = (tripId: string, changes: Partial<Trip>) => {
+    const updated = trips.map(trip => (trip.id === tripId ? { ...trip, ...changes } : trip));
+    persistTrips(updated);
+  };
+
+  const moveQuoteToTrip = (quoteRef: string, targetTripId: string) => {
+    const cleaned = trips.map(trip => ({ ...trip, quoteRefs: trip.quoteRefs.filter(ref => ref !== quoteRef) }));
+    const updated = cleaned.map(trip => (
+      trip.id === targetTripId && !trip.quoteRefs.includes(quoteRef)
+        ? { ...trip, quoteRefs: [...trip.quoteRefs, quoteRef] }
+        : trip
+    ));
+    persistTrips(updated);
+  };
+
+  const removeQuoteFromTrip = (quoteRef: string) => {
+    const updated = trips.map(trip => ({ ...trip, quoteRefs: trip.quoteRefs.filter(ref => ref !== quoteRef) }));
+    persistTrips(updated);
+  };
+
+  const deleteTrip = (tripId: string) => {
+    if (!confirm('Delete this trip plan? Customers will become unassigned.')) return;
+    persistTrips(trips.filter(trip => trip.id !== tripId));
   };
 
   const handleLogin = (e: React.FormEvent) => {
@@ -163,9 +240,17 @@ const AdminPortal: React.FC = () => {
       totalQuotes: quotes.length,
       totalVolume: Math.round(quotes.reduce((acc, curr) => acc + curr.volume, 0)),
       totalPotentialRevenue: Math.round(quotes.reduce((acc, curr) => acc + curr.price, 0)),
-      acceptedMoves: quotes.filter(q => q.status === 'Quote Accepted').length
+      acceptedMoves: quotes.filter(q => q.status === 'Quote Accepted').length,
+      totalTrips: trips.length,
     };
-  }, [quotes]);
+  }, [quotes, trips]);
+
+  const acceptedQuotes = useMemo(() => quotes.filter(q => q.status === 'Quote Accepted'), [quotes]);
+  const assignedQuoteRefs = useMemo(() => new Set(trips.flatMap(trip => trip.quoteRefs)), [trips]);
+  const unassignedAcceptedQuotes = useMemo(
+    () => acceptedQuotes.filter(quote => !assignedQuoteRefs.has(quote.ref)),
+    [acceptedQuotes, assignedQuoteRefs],
+  );
 
   if (!isAuthenticated) {
     return (
@@ -253,6 +338,9 @@ const AdminPortal: React.FC = () => {
             <button onClick={() => setActiveTab('quotes')} className={`w-full flex items-center space-x-3 px-4 py-4 rounded-2xl font-bold transition-all ${activeTab === 'quotes' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
               <Calendar size={20} /><span>Manage Quotes</span>{stats.totalQuotes > 0 && <span className="bg-blue-600 text-white text-[10px] px-2 py-1 rounded-full">{stats.totalQuotes}</span>}
             </button>
+            <button onClick={() => setActiveTab('trips')} className={`w-full flex items-center space-x-3 px-4 py-4 rounded-2xl font-bold transition-all ${activeTab === 'trips' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
+              <Truck size={20} /><span>Trip Builder</span>{stats.totalTrips > 0 && <span className="bg-blue-600 text-white text-[10px] px-2 py-1 rounded-full">{stats.totalTrips}</span>}
+            </button>
             <button onClick={() => setActiveTab('database')} className={`w-full flex items-center space-x-3 px-4 py-4 rounded-2xl font-bold transition-all ${activeTab === 'database' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
               <Database size={20} /><span>System Backup</span>
             </button>
@@ -331,6 +419,112 @@ const AdminPortal: React.FC = () => {
                     <TrendingUp className="absolute -bottom-10 -right-10 w-48 h-48 opacity-10" />
                     <div className="relative z-10"><h4 className="text-xl font-bold mb-2">Market Insight: UK to Spain</h4><p className="text-blue-200 text-sm leading-relaxed max-w-xl">Current trends show a 15% increase in removals to the Costa Blanca region this quarter. Logistics optimization suggests consolidating part-loads for Murcia on Friday runs.</p></div>
                  </div>
+              </div>
+            )}
+            {activeTab === 'trips' && (
+              <div className="p-8 animate-fade-in space-y-8">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900">Trip Builder</h3>
+                  <p className="text-sm text-slate-500 mt-1">A trip is one complete journey: depot → customer drops/collections → return to depot.</p>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 space-y-4">
+                  <h4 className="font-black text-slate-900">Create a new departure trip</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input value={newTripName} onChange={(e) => setNewTripName(e.target.value)} placeholder="Trip name (e.g. Friday Murcia Run)" className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900" />
+                    <input value={newTripDate} onChange={(e) => setNewTripDate(e.target.value)} type="date" className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900" />
+                    <button onClick={createTrip} className="bg-slate-900 text-white rounded-xl px-4 py-2 font-bold text-sm hover:bg-slate-800 transition-colors">Create Trip</button>
+                  </div>
+                  <textarea value={newTripNotes} onChange={(e) => setNewTripNotes(e.target.value)} placeholder="Planner notes (route sequence, driver notes, depot loading comments)." className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900 min-h-20" />
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Group part-load customers into this trip</p>
+                    <div className="grid sm:grid-cols-2 gap-2 max-h-40 overflow-auto pr-2">
+                      {acceptedQuotes.map(quote => (
+                        <label key={quote.ref} className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={selectedTripCustomers.includes(quote.ref)}
+                            onChange={(e) => setSelectedTripCustomers(prev => e.target.checked ? [...prev, quote.ref] : prev.filter(ref => ref !== quote.ref))}
+                          />
+                          <span className="font-bold text-slate-700">{quote.ref}</span>
+                          <span className="text-slate-500 truncate">{quote.destination}</span>
+                        </label>
+                      ))}
+                      {acceptedQuotes.length === 0 && <p className="text-xs text-slate-400 italic">No accepted customers yet. Accept quotes first.</p>}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                  <div className="xl:col-span-2 space-y-4">
+                    {trips.map(trip => (
+                      <div key={trip.id} className="border border-slate-200 rounded-2xl p-5 bg-white shadow-sm">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+                          <div>
+                            <p className="text-lg font-black text-slate-900">{trip.name}</p>
+                            <p className="text-xs text-slate-500">Departure: {trip.departureDate || 'TBC'} • Customers: {trip.quoteRefs.length}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <select value={trip.status} onChange={(e) => updateTrip(trip.id, { status: e.target.value as Trip['status'] })} className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5">
+                              <option value="draft">Draft</option>
+                              <option value="planned">Planned</option>
+                              <option value="in_transit">In Transit</option>
+                              <option value="completed">Completed</option>
+                            </select>
+                            <button onClick={() => deleteTrip(trip.id)} className="p-2 text-red-500 border border-red-200 rounded-lg hover:bg-red-50"><Trash2 size={14} /></button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {trip.quoteRefs.map(ref => {
+                            const quote = quotes.find(q => q.ref === ref);
+                            if (!quote) return null;
+                            return (
+                              <div key={ref} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                                <div>
+                                  <p className="text-xs font-black text-slate-900">{quote.ref} • {quote.customerName || quote.email}</p>
+                                  <p className="text-xs text-slate-500">{quote.origin} → {quote.destination} • {quote.volume} m³</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <select value={trip.id} onChange={(e) => moveQuoteToTrip(ref, e.target.value)} className="text-xs bg-white border border-slate-200 rounded-lg px-2 py-1">
+                                    {trips.map(moveTarget => (
+                                      <option key={moveTarget.id} value={moveTarget.id}>{moveTarget.name}</option>
+                                    ))}
+                                  </select>
+                                  <button onClick={() => removeQuoteFromTrip(ref)} className="text-xs font-bold text-slate-500 hover:text-red-600">Unassign</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {trip.quoteRefs.length === 0 && <p className="text-xs text-slate-400 italic">No customers assigned to this trip yet.</p>}
+                        </div>
+                        {trip.notes && <p className="text-xs text-slate-500 mt-4 border-t border-slate-100 pt-3"><span className="font-bold text-slate-700">Notes:</span> {trip.notes}</p>}
+                      </div>
+                    ))}
+                    {trips.length === 0 && <p className="text-sm text-slate-400 italic">No trips created yet.</p>}
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 h-fit">
+                    <h4 className="font-black text-slate-900 mb-2">Unassigned accepted customers</h4>
+                    <p className="text-xs text-slate-500 mb-4">Move these part-load jobs into a trip to build departure runs.</p>
+                    <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
+                      {unassignedAcceptedQuotes.map(quote => (
+                        <div key={quote.ref} className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                          <p className="text-xs font-black text-slate-900">{quote.ref} • {quote.customerName || quote.email}</p>
+                          <p className="text-xs text-slate-500 mb-2">{quote.origin} → {quote.destination}</p>
+                          <div className="flex gap-2">
+                            <select onChange={(e) => e.target.value && moveQuoteToTrip(quote.ref, e.target.value)} defaultValue="" className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2 py-1">
+                              <option value="" disabled>Assign to trip...</option>
+                              {trips.map(trip => (
+                                <option key={trip.id} value={trip.id}>{trip.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      ))}
+                      {unassignedAcceptedQuotes.length === 0 && <p className="text-xs text-slate-400 italic">All accepted customers are currently grouped into trips.</p>}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
             {activeTab === 'database' && (
